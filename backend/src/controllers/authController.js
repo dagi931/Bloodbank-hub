@@ -249,6 +249,21 @@ async function registerComplete(req, res) {
       return res.status(400).json({ error: "Email already registered" });
     }
 
+    if (role === "donor" && (faydaId || phone)) {
+      const existingDonor = await mainDb.donor.findFirst({
+        where: {
+          OR: [
+            ...(faydaId ? [{ fayda_id: faydaId }] : []),
+            ...(phone ? [{ phone }] : [])
+          ]
+        },
+        select: { user_id: true }
+      });
+      if (existingDonor?.user_id) {
+        return res.status(409).json({ error: "This donor ID is already linked to a user account. Use that account instead of creating another user." });
+      }
+    }
+
     // Set entity name depending on role
     const finalEntityName =
       role === "donor" ? name : entityName || `${role.toUpperCase()} Entity`;
@@ -267,6 +282,21 @@ async function registerComplete(req, res) {
         entity_name: finalEntityName,
       },
     });
+
+    // Real-time broadcast for admin notifications
+    try {
+      const io = req.app.get('io');
+      if (io && role !== 'donor') {
+        io.emit('new_workstation_registered', {
+          id: newUser.id,
+          entity_name: finalEntityName,
+          role: newUser.role,
+          message: `New ${role.toUpperCase()} registration: ${finalEntityName} awaiting approval.`
+        });
+      }
+    } catch (e) {
+      console.warn('[Socket Broadcast Error]:', e.message);
+    }
 
     // If role is donor, set up donor profile in PostgreSQL
     if (role === "donor") {

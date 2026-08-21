@@ -16,30 +16,11 @@ export default function DonorDashboard({ activeTab = 'dashboard', setActiveTab }
   const [countdownText, setCountdownText] = useState('');
   const [isEligibleNow, setIsEligibleNow] = useState(true);
 
-  // Appointments states
-  const [appointments, setAppointments] = useState([]);
-  const [stations, setStations] = useState([]);
-  const [bookingStationId, setBookingStationId] = useState('');
-  const [bookingDateTime, setBookingDateTime] = useState('');
-  const [bookingLoading, setBookingLoading] = useState(false);
-  const [bookingSuccess, setBookingSuccess] = useState(null);
-  const [bookingError, setBookingError] = useState(null);
-
   // Messages states
   const [messages, setMessages] = useState([]);
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [loadingMessages, setLoadingMessages] = useState(false);
-
-  const loadAppointments = async () => {
-    try {
-      const appts = await api.donor.getAppointments();
-      setAppointments(appts || []);
-      const stats = await api.donor.getStations();
-      setStations(stats || []);
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  const [historyError, setHistoryError] = useState(null);
 
   const loadMessages = async () => {
     setLoadingMessages(true);
@@ -57,50 +38,28 @@ export default function DonorDashboard({ activeTab = 'dashboard', setActiveTab }
   };
 
   useEffect(() => {
-    if (activeTab === 'appointments' || activeTab === 'reminders') {
-      loadAppointments();
-    }
     if (activeTab === 'messages') {
       loadMessages();
     }
   }, [activeTab]);
-
-  const handleBookAppointment = async (e) => {
-    e.preventDefault();
-    if (!bookingStationId || !bookingDateTime) {
-      setBookingError('Please select both a donation station and a schedule slot.');
-      return;
-    }
-    setBookingLoading(true);
-    setBookingError(null);
-    setBookingSuccess(null);
-    try {
-      const res = await api.donor.bookAppointment(bookingStationId, bookingDateTime);
-      setBookingSuccess(res.message || 'Appointment scheduled successfully!');
-      setBookingStationId('');
-      setBookingDateTime('');
-      await loadAppointments();
-    } catch (err) {
-      setBookingError(err.message || 'Failed to book slot.');
-    } finally {
-      setBookingLoading(false);
-    }
-  };
-
-  const handleCancelAppointment = async (apptId) => {
-    try {
-      await api.donor.cancelAppointment(apptId);
-      await loadAppointments();
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
   const loadDashboardData = async () => {
     try {
       const dashboardInfo = await api.donor.getDashboardInfo();
       setData(dashboardInfo);
       setIsEligibleNow(dashboardInfo?.eligibility?.is_eligible ?? true);
+
+      // Always attempt to fetch full history and prefer it if present
+      try {
+        const fullHistory = await api.donor.getHistory();
+        if (fullHistory && fullHistory.length > 0) {
+          setData(prev => ({ ...prev, history: fullHistory }));
+          setHistoryError(null);
+        }
+      } catch (e) {
+        console.error('Failed to load full history', e);
+        setHistoryError(e.message || 'Failed to load donation history');
+      }
     } catch (err) {
       setError(err.message || 'Failed to load donor dashboard.');
     } finally {
@@ -148,7 +107,7 @@ export default function DonorDashboard({ activeTab = 'dashboard', setActiveTab }
     return <div style={{ color: 'var(--text-secondary)', padding: '20px' }}>Loading donor workspace dashboard...</div>;
   }
 
-  const donor = data?.donor || { name: 'Abebe Kebede', blood_type: 'B+', points: 1250, phone: '+251911223344', fayda_id: 'FAY-88219' };
+  const donor = data?.donor || {};
   const history = data?.history || [];
   const leaderboard = data?.leaderboard || [];
   const announcements = data?.announcements || [];
@@ -161,13 +120,9 @@ export default function DonorDashboard({ activeTab = 'dashboard', setActiveTab }
   ];
 
   // Demo history fallback
-  const displayHistory = history.length > 0 ? history.slice(0, 3) : [
-    { id: 1, collected_at: '2025-05-15', station_name: 'Addis Ababa Station', status: 'validated' },
-    { id: 2, collected_at: '2025-02-10', station_name: 'University Drive', status: 'validated' },
-    { id: 3, collected_at: '2024-11-12', station_name: 'Lideta Center', status: 'validated' }
-  ];
+  const displayHistory = history.length > 0 ? history.slice(0, 3) : [];
 
-  const totalDonations = history.length > 0 ? history.length : 8;
+  const totalDonations = history.length;
   const livesSaved = totalDonations * 3;
 
   return (
@@ -185,7 +140,7 @@ export default function DonorDashboard({ activeTab = 'dashboard', setActiveTab }
           
           {/* Header Greeting */}
           <div className="dashboard-header">
-            <h2>Welcome, {donor.name}! 👋</h2>
+            <h2>Welcome, {donor.name || 'Donor'}! <span role="img" aria-label="wave">&#x1F44B;</span></h2>
             <p>Thank you for being a life saver.</p>
           </div>
 
@@ -200,7 +155,7 @@ export default function DonorDashboard({ activeTab = 'dashboard', setActiveTab }
                   <Star size={18} fill="#f59e0b" />
                 </div>
               </div>
-              <div className="stat-card-value">{donor.points || '1,250'}</div>
+              <div className="stat-card-value">{donor.points != null ? donor.points.toLocaleString() : '—'}</div>
               <div className="stat-card-trend trend-up">
                 <span>+50 this month</span>
               </div>
@@ -214,7 +169,7 @@ export default function DonorDashboard({ activeTab = 'dashboard', setActiveTab }
                   <Heart size={18} fill="#ef233c" />
                 </div>
               </div>
-              <div className="stat-card-value">{totalDonations}</div>
+              <div className="stat-card-value">{totalDonations != null ? totalDonations.toLocaleString() : '—'}</div>
               <div className="stat-card-trend trend-up">
                 <span>+1 this month</span>
               </div>
@@ -246,7 +201,7 @@ export default function DonorDashboard({ activeTab = 'dashboard', setActiveTab }
                   <Droplet size={18} fill="#ef233c" />
                 </div>
               </div>
-              <div className="stat-card-value">{donor.blood_type || 'B+'}</div>
+              <div className="stat-card-value">{donor.blood_type || '—'}</div>
               <div className="stat-card-trend trend-neutral">
                 <span>Positive</span>
               </div>
@@ -323,11 +278,11 @@ export default function DonorDashboard({ activeTab = 'dashboard', setActiveTab }
               </div>
 
               <button 
-                onClick={() => setActiveTab('appointments')} 
+                onClick={() => setActiveTab('campaigns')} 
                 className="quick-action-btn"
                 style={{ marginTop: 'auto', fontSize: '0.78rem', padding: '8px 14px' }}
               >
-                {isEligibleNow ? 'Schedule Donation' : 'View Eligibility Details'}
+                {isEligibleNow ? 'Explore Campaigns' : 'View Eligibility Details'}
               </button>
             </div>
 
@@ -338,22 +293,32 @@ export default function DonorDashboard({ activeTab = 'dashboard', setActiveTab }
                 <History size={16} color="var(--text-muted)" />
               </div>
 
+              {historyError && (
+                <div style={{ background: 'rgba(255,205,86,0.12)', padding: '10px', borderRadius: '8px', marginBottom: '12px', color: '#b45309' }}>
+                  Unable to load donation history: {historyError}. Make sure you're signed in.
+                </div>
+              )}
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px' }}>
-                {displayHistory.map((h, idx) => (
-                  <div key={h.id || idx} className="clean-list-item">
-                    <div>
-                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.84rem' }}>
-                        {new Date(h.collected_at || Date.now()).toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })}
+                {displayHistory.length === 0 ? (
+                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>No recent donations recorded.</div>
+                ) : (
+                  displayHistory.map((h, idx) => (
+                    <div key={h.id || idx} className="clean-list-item">
+                      <div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.84rem' }}>
+                          {new Date(h.collected_at || Date.now()).toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                          {h.station_name || 'Addis Ababa Station'}
+                        </div>
                       </div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                        {h.station_name || 'Addis Ababa Station'}
-                      </div>
+                      <span className="badge badge-approved" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
+                        Completed
+                      </span>
                     </div>
-                    <span className="badge badge-approved" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>
-                      Completed
-                    </span>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
 
               <button 
@@ -383,7 +348,7 @@ export default function DonorDashboard({ activeTab = 'dashboard', setActiveTab }
                 <Heart size={16} fill="#fff" />
               </div>
               <span style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                ❤️ You have saved {livesSaved} lives so far. Thank you for your continued dedication!
+                ❤️ You have saved {livesSaved != null ? livesSaved.toLocaleString() : '—'} lives so far. Thank you for your continued dedication!
               </span>
             </div>
             <button 
@@ -696,7 +661,7 @@ export default function DonorDashboard({ activeTab = 'dashboard', setActiveTab }
             </div>
             <div className="clean-list-item">
               <span style={{ color: 'var(--text-secondary)' }}>Reward Points:</span>
-              <strong style={{ color: '#f59e0b' }}>{donor.points} pts</strong>
+              <strong style={{ color: '#f59e0b' }}>{donor.points != null ? `${donor.points.toLocaleString()} pts` : '—'}</strong>
             </div>
           </div>
         </div>

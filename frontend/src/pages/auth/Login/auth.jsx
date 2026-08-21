@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LogIn, ArrowRight } from 'lucide-react';
+import { LogIn, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { api } from '../../../services/api';
 import ForgotPassword from './ForgotPassword';
  import ResetPassword from "./ResetPassword";
@@ -14,6 +14,7 @@ export default function Login({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -90,14 +91,26 @@ export default function Login({
 
           </div>
 
-          <input
-            type="password"
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="login-input"
-          />
+          <div style={{ position: 'relative' }}>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="login-input"
+              style={{ paddingRight: '42px' }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((value) => !value)}
+              title={showPassword ? 'Hide password' : 'Show password'}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0, display: 'flex' }}
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
         </div>
 
         <button

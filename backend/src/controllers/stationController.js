@@ -2,6 +2,21 @@ const { mainDb } = require('../config/prisma');
 const { logAction } = require('../utils/audit');
 const { sendSMS } = require('../utils/sms');
 
+function validatePreDonationScreening(screeningData) {
+  const questionnaire = screeningData?.questionnaire;
+  const vitals = screeningData?.vitals;
+  const requiredQuestions = ['tattoo', 'medication', 'surgery', 'malaria', 'unwell', 'hivHistory'];
+  const requiredVitals = ['hemoglobin', 'heart_rate', 'blood_pressure', 'temperature', 'weight'];
+
+  if (!questionnaire || requiredQuestions.some(key => questionnaire[key] !== 'No')) {
+    return 'All pre-donation screening questions must be answered with no risk markers.';
+  }
+  if (!vitals || requiredVitals.some(key => !String(vitals[key] || '').trim())) {
+    return 'Hemoglobin, heart rate, blood pressure, temperature, and weight are required before donation.';
+  }
+  return null;
+}
+
 async function lookupDonor(req, res) {
   const { id } = req.params; 
   try {
@@ -43,9 +58,27 @@ async function lookupDonor(req, res) {
       }
     }
 
+    const existingSample = await mainDb.bloodSample.findFirst({
+      where: { fayda_id: donor.fayda_id, station_id: req.user.id },
+      orderBy: { collected_at: 'desc' },
+      select: { id: true, status: true, lab_id: true, collected_at: true }
+    });
+    const appointment = await mainDb.appointment.findFirst({
+      where: {
+        donor_id: donor.fayda_id,
+        station_id: req.user.id,
+        status: 'scheduled',
+        date_time: { gte: new Date() }
+      },
+      orderBy: { date_time: 'asc' },
+      select: { id: true, date_time: true, status: true }
+    });
+
     res.json({
       found: true,
       donor,
+      existing_sample: existingSample,
+      appointment,
       eligibility: {
         is_eligible: isEligible,
         days_remaining: daysRemaining,
@@ -147,9 +180,14 @@ async function registerDonorEvent(req, res) {
 }
 
 async function createBloodSample(req, res) {
-  const { fayda_id, donor_id, id, phone, name, blood_type, lab_id, health_notes } = req.body;
+  const { fayda_id, donor_id, id, phone, name, blood_type, lab_id, appointment_id, screening_data, health_notes } = req.body;
 
   try {
+    const screeningError = validatePreDonationScreening(screening_data);
+    if (screeningError) {
+      return res.status(400).json({ error: screeningError });
+    }
+
     const searchId = fayda_id || donor_id || id;
     let donor = null;
 
@@ -174,17 +212,36 @@ async function createBloodSample(req, res) {
       donor = await mainDb.donor.findFirst({ where: { name: { contains: name, mode: 'insensitive' } } });
     }
 
-    // Check eligibility if donor exists
-    if (donor && donor.last_donation_date) {
-      const lastDonation = new Date(donor.last_donation_date);
-      const nextDate = new Date(lastDonation.getTime() + 90 * 24 * 60 * 60 * 1000);
-      const today = new Date();
-      if (today < nextDate) {
-        const diffTime = nextDate.getTime() - today.getTime();
-        const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        return res.status(400).json({
-          error: `Donor is ineligible to donate blood. Must wait 3 months (90 days) between donations. Last donated on ${lastDonation.toLocaleDateString()}. Next eligible on ${nextDate.toLocaleDateString()} (${daysRemaining} days remaining).`
-        });
+    let donorAppointment = null;
+    let targetLabId = null;
+    if (donor) {
+      donorAppointment = await mainDb.appointment.findFirst({
+        where: {
+          ...(appointment_id ? { id: appointment_id } : {}),
+          donor_id: donor.fayda_id,
+          station_id: req.user.id,
+          status: 'scheduled',
+          date_time: { gte: new Date() }
+        }
+      });
+      if (!donorAppointment) {
+        return res.status(400).json({ error: 'This donor must have a scheduled appointment at this station before donating.' });
+      }
+
+      const lab = await mainDb.user.findFirst({
+        where: { id: lab_id, role: 'laboratory', status: 'approved' },
+        select: { id: true }
+      });
+      if (!lab) {
+        return res.status(400).json({ error: 'Select an approved laboratory for this donation.' });
+      }
+      targetLabId = lab.id;
+
+      if (donor.last_donation_date) {
+        const nextEligible = new Date(new Date(donor.last_donation_date).getTime() + 90 * 24 * 60 * 60 * 1000);
+        if (new Date() < nextEligible) {
+          return res.status(400).json({ error: `Donor is not eligible until ${nextEligible.toLocaleDateString()}.` });
+        }
       }
     }
 
@@ -214,29 +271,6 @@ async function createBloodSample(req, res) {
           points: 0
         }
       });
-    } else {
-      // Update donor's last donation date to now
-      await mainDb.donor.update({
-        where: { fayda_id: donor.fayda_id },
-        data: {
-          last_donation_date: new Date(),
-          health_status: 'unknown'
-        }
-      });
-    }
-
-    // Validate and assign laboratory
-    let targetLabId = (lab_id && lab_id.trim()) ? lab_id.trim() : null;
-    if (targetLabId) {
-      const labExists = await mainDb.user.findUnique({ where: { id: targetLabId } });
-      if (!labExists) targetLabId = null;
-    }
-    if (!targetLabId) {
-      const defaultLab = await mainDb.user.findFirst({
-        where: { role: 'laboratory', status: 'approved' },
-        select: { id: true }
-      });
-      targetLabId = defaultLab ? defaultLab.id : null;
     }
 
     // Validate station ID
@@ -253,12 +287,33 @@ async function createBloodSample(req, res) {
       data: {
         fayda_id: donor.fayda_id,
         blood_type: blood_type || donor.blood_type || 'O+',
-        status: 'pending_lab',
+        status: donorAppointment ? 'pending_lab' : 'collected',
         station_id: targetStationId,
         lab_id: targetLabId,
-        health_notes: health_notes || null
+        health_notes: health_notes || (screening_data ? JSON.stringify(screening_data) : null)
       }
     });
+
+    await mainDb.donor.update({
+      where: { fayda_id: donor.fayda_id },
+      data: { last_donation_date: new Date(), health_status: 'unknown' }
+    });
+
+    if (donorAppointment) {
+      await mainDb.appointment.updateMany({
+        where: { id: donorAppointment.id, donor_id: donor.fayda_id, station_id: targetStationId, status: 'scheduled' },
+        data: { status: 'completed' }
+      });
+
+      const io = req.app.get('io');
+      if (io) {
+        io.emit('notification', {
+          recipientRole: 'laboratory',
+          recipientId: targetLabId,
+          message: 'A scheduled donor sample is waiting for laboratory screening.'
+        });
+      }
+    }
 
     // Send thank you SMS for donation (Safe try-catch)
     try {
@@ -274,19 +329,72 @@ async function createBloodSample(req, res) {
       await logAction(
         req.user.id,
         'BLOOD_SAMPLE_COLLECTED',
-        `Collected blood sample ${sample.id} for donor ${donor.name} (${donor.fayda_id}) and routed to lab ${targetLabId || 'unassigned'}.`
+        `Collected blood sample ${sample.id} for donor ${donor.name} (${donor.fayda_id}). Awaiting laboratory routing.`
       );
     } catch (auditErr) {
       console.warn('[Station] Audit log failed:', auditErr.message);
     }
  
     res.status(201).json({
-      message: 'Blood sample logged and routed to laboratory',
+      message: donorAppointment
+        ? 'Donation collected and sent to the laboratory for screening.'
+        : 'Blood sample collected successfully and is ready to be routed to the laboratory.',
       sample
     });
   } catch (err) {
     console.error('[Station] createBloodSample error:', err);
     res.status(500).json({ error: err.message || 'Failed to log blood sample' });
+  }
+}
+
+async function routeSampleToLab(req, res) {
+  const { id } = req.params;
+  const { lab_id } = req.body;
+
+  if (!lab_id) {
+    return res.status(400).json({ error: 'A screening laboratory is required.' });
+  }
+
+  try {
+    const lab = await mainDb.user.findFirst({
+      where: { id: lab_id, role: 'laboratory', status: 'approved' },
+      select: { id: true, entity_name: true }
+    });
+    if (!lab) {
+      return res.status(400).json({ error: 'Selected laboratory is not approved.' });
+    }
+
+    const sample = await mainDb.bloodSample.findFirst({
+      where: { id, station_id: req.user.id },
+      select: { id: true, status: true, lab_id: true }
+    });
+    if (!sample) {
+      return res.status(404).json({ error: 'Collected sample not found at this station.' });
+    }
+    if (sample.status !== 'collected' || sample.lab_id) {
+      return res.status(400).json({ error: 'Only unassigned collected samples can be routed.' });
+    }
+
+    const routedSample = await mainDb.bloodSample.update({
+      where: { id },
+      data: { lab_id: lab.id, status: 'pending_lab' }
+    });
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('notification', {
+        recipientRole: 'laboratory',
+        recipientId: lab.id,
+        message: 'A collected blood sample is waiting for laboratory screening.'
+      });
+    }
+
+    await logAction(req.user.id, 'BLOOD_SAMPLE_ROUTED_TO_LAB', `Routed collected blood sample ${id} to ${lab.entity_name}.`);
+
+    res.json({ message: 'Sample routed to laboratory successfully.', sample: routedSample });
+  } catch (err) {
+    console.error('[Station] routeSampleToLab error:', err);
+    res.status(500).json({ error: err.message || 'Failed to route sample to laboratory' });
   }
 }
 
@@ -412,6 +520,11 @@ async function registerAndCollect(req, res) {
   }
 
   try {
+    const screeningError = validatePreDonationScreening(screening_data);
+    if (screeningError) {
+      return res.status(400).json({ error: screeningError });
+    }
+
     // 1. Check if donor with this phone or fayda_id exists
     let donor = await mainDb.donor.findFirst({
       where: {
@@ -423,28 +536,12 @@ async function registerAndCollect(req, res) {
     });
 
     if (donor) {
-      if (donor.last_donation_date) {
-        const lastDonation = new Date(donor.last_donation_date);
-        const nextDate = new Date(lastDonation.getTime() + 90 * 24 * 60 * 60 * 1000);
-        const today = new Date();
-        if (today < nextDate) {
-          const diffTime = nextDate.getTime() - today.getTime();
-          const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-          return res.status(400).json({
-            error: `Donor is ineligible to donate blood. Must wait 3 months (90 days) between donations. Last donated on ${lastDonation.toLocaleDateString()}. Next eligible on ${nextDate.toLocaleDateString()} (${daysRemaining} days remaining).`
-          });
-        }
-      }
-
-      donor = await mainDb.donor.update({
-        where: { fayda_id: donor.fayda_id },
-        data: {
-          last_donation_date: new Date(),
-          blood_type: blood_type || donor.blood_type,
-          health_status: 'unknown'
-        }
+      return res.status(409).json({
+        error: 'This donor ID already exists. Do not register or collect another sample using this ID; route the existing sample to the laboratory.'
       });
-    } else {
+    }
+
+    {
       let finalFaydaId = (fayda_id && fayda_id.trim()) ? fayda_id.trim() : null;
       if (!finalFaydaId) {
         const donors = await mainDb.donor.findMany({ select: { fayda_id: true } });
@@ -474,20 +571,6 @@ async function registerAndCollect(req, res) {
       });
     }
 
-    // 2. Validate and assign laboratory
-    let targetLabId = (lab_id && lab_id.trim()) ? lab_id.trim() : null;
-    if (targetLabId) {
-      const labExists = await mainDb.user.findUnique({ where: { id: targetLabId } });
-      if (!labExists) targetLabId = null;
-    }
-    if (!targetLabId) {
-      const defaultLab = await mainDb.user.findFirst({
-        where: { role: 'laboratory', status: 'approved' },
-        select: { id: true }
-      });
-      targetLabId = defaultLab ? defaultLab.id : null;
-    }
-
     // Validate station ID
     let targetStationId = req.user?.id;
     if (targetStationId) {
@@ -503,9 +586,8 @@ async function registerAndCollect(req, res) {
       data: {
         fayda_id: donor.fayda_id,
         blood_type: blood_type || donor.blood_type || 'O+',
-        status: 'pending_lab',
+        status: 'collected',
         station_id: targetStationId,
-        lab_id: targetLabId,
         health_notes: health_notes || (screening_data ? JSON.stringify(screening_data) : null)
       }
     });
@@ -524,7 +606,7 @@ async function registerAndCollect(req, res) {
       await logAction(
         req.user.id,
         'DONOR_REGISTERED_AND_COLLECTED',
-        `Registered donor ${donor.name} (${donor.fayda_id}) and created sample ${sample.id}.`
+        `Registered donor ${donor.name} (${donor.fayda_id}) and created collected sample ${sample.id}. Awaiting laboratory routing.`
       );
     } catch (auditErr) {
       console.warn('[Station] Audit log failed:', auditErr.message);
@@ -546,6 +628,7 @@ module.exports = {
   registerDonorEvent,
   registerAndCollect,
   createBloodSample,
+  routeSampleToLab,
   getStationSamples,
   getApprovedLabs,
   getDonorsList,
