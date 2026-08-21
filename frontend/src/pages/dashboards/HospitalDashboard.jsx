@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Package, Truck, MessageSquare, AlertTriangle, ShieldCheck, Search, PlusCircle, 
-  RefreshCw, Send, Check, ShieldAlert, Stethoscope, UserPlus, ClipboardList, X, 
+import {
+  Package, Truck, MessageSquare, AlertTriangle, ShieldCheck, Search, PlusCircle,
+  RefreshCw, Send, Check, ShieldAlert, Stethoscope, UserPlus, ClipboardList, X,
   CheckCircle, Droplet, Clock, ArrowRight, CheckCircle2, Users, Building, AlertCircle, Calendar
 } from 'lucide-react';
 import { api } from '../../services/api';
 import SelectDropdown from '../../components/common/SelectDropdown';
 import { io } from 'socket.io-client';
+import BottomToast from '../../components/common/BottomToast';
 
 export default function HospitalDashboard({ tab = 'dashboard', setTab, isMobile }) {
   const [internalStock, setInternalStock] = useState([]);
@@ -299,19 +300,13 @@ export default function HospitalDashboard({ tab = 'dashboard', setTab, isMobile 
         </div>
       )}
 
-      {success && (
-        <div style={{ background: 'rgba(6,214,160,0.1)', color: '#06d6a0', padding: '12px 16px', borderRadius: '8px', border: '1px solid rgba(6,214,160,0.2)', fontSize: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>{success}</span>
-          <button onClick={() => setSuccess(null)} style={{ background: 'none', border: 'none', color: '#06d6a0', cursor: 'pointer', padding: 0 }}>
-            <X size={14} />
-          </button>
-        </div>
-      )}
+      {/* Floating Bottom Success Toast (Auto-dismisses in 5s) */}
+      <BottomToast message={success} onClose={() => setSuccess(null)} />
 
       {/* DASHBOARD OVERVIEW */}
       {(tab === 'dashboard' || tab === 'main' || !tab) && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
-          
+
           {/* Header */}
           <div className="dashboard-header">
             <h2>Hospital Overview</h2>
@@ -320,7 +315,7 @@ export default function HospitalDashboard({ tab = 'dashboard', setTab, isMobile 
 
           {/* 4 Stat Cards Row */}
           <div className="stat-card-grid">
-            
+
             {/* Stat 1: Available Stock */}
             <div className="stat-card">
               <div className="stat-card-top">
@@ -381,7 +376,7 @@ export default function HospitalDashboard({ tab = 'dashboard', setTab, isMobile 
 
           {/* 3 Column Grid Section */}
           <div className="dashboard-grid-3">
-            
+
             {/* Card 1: Available Stock (Local) */}
             <div className="dashboard-card">
               <div className="dashboard-card-title">
@@ -405,8 +400,8 @@ export default function HospitalDashboard({ tab = 'dashboard', setTab, isMobile 
                 ))}
               </div>
 
-              <button 
-                onClick={() => setTab('stock')} 
+              <button
+                onClick={() => setTab('stock')}
                 className="view-all-btn"
               >
                 View All Stock <ArrowRight size={13} />
@@ -438,8 +433,8 @@ export default function HospitalDashboard({ tab = 'dashboard', setTab, isMobile 
                 ))}
               </div>
 
-              <button 
-                onClick={() => setTab('request')} 
+              <button
+                onClick={() => setTab('request')}
                 className="view-all-btn"
               >
                 View All Requests <ArrowRight size={13} />
@@ -453,29 +448,29 @@ export default function HospitalDashboard({ tab = 'dashboard', setTab, isMobile 
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', justifyContent: 'center', flex: 1 }}>
-                <button 
-                  onClick={() => setTab('request')} 
+                <button
+                  onClick={() => setTab('request')}
                   className="quick-action-btn"
                 >
                   <Truck size={16} /> Request Blood
                 </button>
-                <button 
+                <button
                   onClick={() => {
                     setTab('patients');
                     setShowAdmitForm(true);
-                  }} 
+                  }}
                   className="quick-action-btn"
                 >
                   <UserPlus size={16} /> Add Patient
                 </button>
-                <button 
-                  onClick={() => setTab('patients')} 
+                <button
+                  onClick={() => setTab('patients')}
                   className="quick-action-btn"
                 >
                   <Users size={16} /> View Patients
                 </button>
-                <button 
-                  onClick={() => setTab('stock')} 
+                <button
+                  onClick={() => setTab('stock')}
                   className="quick-action-btn btn-outline"
                 >
                   <Package size={16} /> Stock Availability
@@ -666,14 +661,14 @@ export default function HospitalDashboard({ tab = 'dashboard', setTab, isMobile 
       {/* PATIENTS & HMS TAB */}
       {(tab === 'patients' || tab === 'hms') && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          
+
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div className="dashboard-header">
               <h2>Hospital Patient Management (HMS)</h2>
               <p>Admit patients, track blood orders, and manage transfusion clinical notes.</p>
             </div>
-            <button 
-              onClick={() => setShowAdmitForm(prev => !prev)} 
+            <button
+              onClick={() => setShowAdmitForm(prev => !prev)}
               className="btn btn-primary"
             >
               <UserPlus size={16} /> {showAdmitForm ? 'Close Form' : 'Admit New Patient'}
@@ -791,13 +786,13 @@ export default function HospitalDashboard({ tab = 'dashboard', setTab, isMobile 
                   </div>
                   <div>
                     <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Units Needed (Bags)</label>
-                    <input 
-                      type="number" 
-                      min="1" 
-                      max="10" 
-                      value={orderForm.units_needed} 
-                      onChange={(e) => setOrderForm({ ...orderForm, units_needed: e.target.value })} 
-                      required 
+                    <input
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={orderForm.units_needed}
+                      onChange={(e) => setOrderForm({ ...orderForm, units_needed: e.target.value })}
+                      required
                     />
                   </div>
                   <div>
@@ -817,11 +812,11 @@ export default function HospitalDashboard({ tab = 'dashboard', setTab, isMobile 
 
                 <div>
                   <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Clinical Transfusion Notes / Indications</label>
-                  <textarea 
-                    rows={2} 
-                    placeholder="e.g. Acute hemorrhagic shock, pre-op orthopedic surgery..." 
-                    value={orderForm.notes} 
-                    onChange={(e) => setOrderForm({ ...orderForm, notes: e.target.value })} 
+                  <textarea
+                    rows={2}
+                    placeholder="e.g. Acute hemorrhagic shock, pre-op orthopedic surgery..."
+                    value={orderForm.notes}
+                    onChange={(e) => setOrderForm({ ...orderForm, notes: e.target.value })}
                   />
                 </div>
 
@@ -889,8 +884,8 @@ export default function HospitalDashboard({ tab = 'dashboard', setTab, isMobile 
                                   </span>
                                 </div>
                                 <div style={{ display: 'flex', gap: '4px', marginTop: '2px', alignItems: 'center' }}>
-                                  <span 
-                                    className={`badge badge-${latestOrder.status === 'dispatched' ? 'approved' : latestOrder.status === 'requisition_placed' ? 'collected' : 'pending'}`} 
+                                  <span
+                                    className={`badge badge-${latestOrder.status === 'dispatched' ? 'approved' : latestOrder.status === 'requisition_placed' ? 'collected' : 'pending'}`}
                                     style={{ fontSize: '0.62rem', padding: '1px 6px' }}
                                   >
                                     {latestOrder.status === 'dispatched' ? '✓ Fulfilled (Internal)' : latestOrder.status === 'requisition_placed' ? '⏳ Requisition Sent' : latestOrder.status}
@@ -964,12 +959,12 @@ export default function HospitalDashboard({ tab = 'dashboard', setTab, isMobile 
             {internalStock.map(s => {
               const isLow = s.quantity < 5;
               return (
-                <div 
+                <div
                   key={s.blood_type}
-                  style={{ 
-                    background: 'var(--bg-main)', 
-                    border: isLow ? '1px solid rgba(239,35,60,0.4)' : '1px solid var(--border-color)', 
-                    borderRadius: '8px', 
+                  style={{
+                    background: 'var(--bg-main)',
+                    border: isLow ? '1px solid rgba(239,35,60,0.4)' : '1px solid var(--border-color)',
+                    borderRadius: '8px',
                     padding: '14px',
                     display: 'flex',
                     flexDirection: 'column',

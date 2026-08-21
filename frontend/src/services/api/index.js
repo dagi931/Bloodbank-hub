@@ -6,6 +6,7 @@ import { warehouseApi } from './warehouse.api';
 import { hospitalApi } from './hospital.api';
 import { hmsApi } from './hms.api';
 import { donorApi } from './donor.api';
+import { notifApi } from './notif.api';
 
 export const api = {
   auth: authApi,
@@ -16,7 +17,8 @@ export const api = {
   hospital: hospitalApi,
   hms: hmsApi,
   donor: donorApi,
+  notifications: notifApi,
 };
 
-export { authApi, adminApi, stationApi, labApi, warehouseApi, hospitalApi, hmsApi, donorApi };
+export { authApi, adminApi, stationApi, labApi, warehouseApi, hospitalApi, hmsApi, donorApi, notifApi };
 export default api;

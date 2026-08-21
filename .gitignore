@@ -13,8 +13,6 @@ out/
 coverage/
 
 # Keep environment templates in version control, but ignore real secret files.
-.env
-.env.*
 !.env.example
 !**/.env.example
 backend/.env
@@ -34,7 +32,6 @@ pnpm-debug.log*
 
 .DS_Store
 Thumbs.db
-.vscode/
 .idea/
 
 tmp/
@@ -44,3 +41,4 @@ temp/
 # Ignore generated client code (each developer generates their own)
 backend/src/generated/
 **/generated/
+config.bat

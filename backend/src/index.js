@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
@@ -11,6 +11,7 @@ const warehouseRoutes = require('./routes/warehouse');
 const hospitalRoutes = require('./routes/hospital');
 const donorRoutes = require('./routes/donor');
 const hmsRoutes = require('./routes/hms');
+const notifRoutes = require('./routes/notifications');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -28,6 +29,7 @@ app.use('/api/warehouse', warehouseRoutes);
 app.use('/api/hospital', hospitalRoutes);
 app.use('/api/donor', donorRoutes);
 app.use('/api/hms', hmsRoutes);
+app.use('/api/notifications', notifRoutes);
 
 // Root heartbeat route
 app.get('/', (req, res) => {
@@ -64,7 +66,7 @@ io.on('connection', (socket) => {
 // Start listening
 server.listen(PORT, () => {
   console.log(`[API Server] Running on http://localhost:${PORT}`);
-  
+
   // Background reminders scheduler
   const { mainDb } = require('./config/prisma');
   const { sendSMS } = require('./utils/sms');
@@ -197,7 +199,7 @@ server.listen(PORT, () => {
       for (const sms of failedSms) {
         try {
           console.log(`[SMS Queue Worker] Retrying SMS delivery to ${sms.phone}...`);
-          
+
           if (!apiKey || apiKey === 'mock-key') {
             await mainDb.smsQueue.update({
               where: { id: sms.id },
@@ -233,7 +235,7 @@ server.listen(PORT, () => {
           console.error(`[SMS Queue Worker] Retry failed for ID: ${sms.id}:`, retryErr.message);
           await mainDb.smsQueue.update({
             where: { id: sms.id },
-            data: { 
+            data: {
               retry_count: sms.retry_count + 1,
               last_error: retryErr.message
             }

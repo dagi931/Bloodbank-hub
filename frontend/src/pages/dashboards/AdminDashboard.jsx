@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { 
   Users, BarChart3, ToggleLeft, ShieldCheck, ShieldAlert, Activity, Key, Check, X, 
   Building, Warehouse, Heart, TrendingUp, TrendingDown, ArrowRight, Clock, 
-  UserCheck, AlertCircle, FileText, CheckCircle2, RefreshCw
+  UserCheck, AlertCircle, FileText, CheckCircle2, RefreshCw, Eye, EyeOff
 } from 'lucide-react';
 import { api } from '../../services/api';
 import Analytics from '../../components/common/Analytics';
+import BottomToast from '../../components/common/BottomToast';
 
 export default function AdminDashboard({ tab = 'dashboard', setTab, isMobile }) {
   const [users, setUsers] = useState([]);
@@ -21,6 +22,7 @@ export default function AdminDashboard({ tab = 'dashboard', setTab, isMobile }) 
   const [resetRequests, setResetRequests] = useState([]);
   const [activeRequest, setActiveRequest] = useState(null);
   const [tempPassword, setTempPassword] = useState('');
+  const [showTempPassword, setShowTempPassword] = useState(false);
   const [successMsg, setSuccessMsg] = useState(null);
 
   const loadData = async () => {
@@ -52,10 +54,12 @@ export default function AdminDashboard({ tab = 'dashboard', setTab, isMobile }) 
 
   const handleStatusUpdate = async (userId, newStatus) => {
     setLoading(true);
+    setError(null);
     try {
       await api.admin.updateUserStatus(userId, newStatus);
       const usersData = await api.admin.getUsers();
       setUsers(usersData || []);
+      setSuccessMsg(`Workstation registration successfully marked as ${newStatus}.`);
     } catch (err) {
       setError(err.message || 'Failed to update user status.');
     } finally {
@@ -70,6 +74,7 @@ export default function AdminDashboard({ tab = 'dashboard', setTab, isMobile }) 
     try {
       const data = await api.admin.triggerReminders();
       setRemindersResult(data);
+      setSuccessMsg(data.message || 'Donation reminders triggered and dispatched via SMS successfully!');
     } catch (err) {
       setError(err.message || 'Failed to trigger donation reminders.');
     } finally {
@@ -99,22 +104,24 @@ export default function AdminDashboard({ tab = 'dashboard', setTab, isMobile }) 
     }
   };
 
-  const filteredUsers = users.filter(u => {
+  const filteredWorkstationUsers = users.filter(u => u.role !== 'donor').filter(u => {
     if (registryCategory === 'all') return true;
     if (registryCategory === 'laboratory') return u.role === 'laboratory';
     if (registryCategory === 'station') return u.role === 'station';
     return u.role !== 'laboratory' && u.role !== 'station';
   });
 
-  const pendingUsers = users.filter(u => u.status === 'pending');
+  const pendingUsers = users.filter(u => u.status === 'pending' && u.role !== 'donor');
 
-  // Fallback demo registrations if none in DB
-  const displayRegistrations = users.length > 0 ? users.slice(0, 4) : [
-    { id: 1, entity_name: 'Addis Ababa Station', role: 'Donation Station', status: 'pending' },
-    { id: 2, entity_name: 'Hawassa Laboratory', role: 'Laboratory', status: 'pending' },
-    { id: 3, entity_name: 'Mekelle Warehouse', role: 'Warehouse', status: 'pending' },
-    { id: 4, entity_name: 'Gondar Hospital', role: 'Hospital', status: 'pending' }
-  ];
+  // Fallback demo registrations if none in DB — only non-donor workstations
+  const displayRegistrations = users.filter(u => u.role !== 'donor').length > 0
+    ? users.filter(u => u.role !== 'donor').slice(0, 4)
+    : [
+      { id: 1, entity_name: 'Addis Ababa Station', role: 'station', status: 'pending' },
+      { id: 2, entity_name: 'Hawassa Laboratory', role: 'laboratory', status: 'pending' },
+      { id: 3, entity_name: 'Mekelle Warehouse', role: 'warehouse', status: 'pending' },
+      { id: 4, entity_name: 'Gondar Hospital', role: 'hospital', status: 'pending' }
+    ];
 
   // Fallback demo logs if none in DB
   const displayLogs = auditLogs.length > 0 ? auditLogs.slice(0, 5) : [
@@ -133,6 +140,9 @@ export default function AdminDashboard({ tab = 'dashboard', setTab, isMobile }) 
           {error}
         </div>
       )}
+
+      {/* Floating Bottom Success Toast (Auto-dismisses in 5s) */}
+      <BottomToast message={successMsg} onClose={() => setSuccessMsg(null)} />
 
       {/* DASHBOARD HOME OVERVIEW */}
       {(tab === 'dashboard' || tab === 'main' || !tab) && (
@@ -351,12 +361,12 @@ export default function AdminDashboard({ tab = 'dashboard', setTab, isMobile }) 
         </div>
       )}
 
-      {/* USER LIST WORKSTATION REGISTRY */}
-      {(tab === 'users' || tab === 'approvals') && (
+      {/* WORKSTATION APPROVALS — only non-donors needing admin approval */}
+      {tab === 'approvals' && (
         <div className="dashboard-card animate-fade-in">
           <div className="dashboard-header" style={{ marginBottom: '16px' }}>
             <h2>Pending Workstation Authorizations</h2>
-            <p>Hospitals, labs, stations, and warehouses must receive administrative approval before they can log in.</p>
+            <p>Hospitals, labs, stations, and warehouses must receive administrative approval before they can log in. Donors do not require approval.</p>
           </div>
 
           {/* Interactive Actor Switcher Tabs */}
@@ -365,9 +375,10 @@ export default function AdminDashboard({ tab = 'dashboard', setTab, isMobile }) 
               const isActive = registryCategory === cat;
               let label = '';
               let count = 0;
+              const nonDonors = users.filter(u => u.role !== 'donor');
               if (cat === 'all') {
                 label = 'All Workstations';
-                count = users.length;
+                count = nonDonors.length;
               } else if (cat === 'laboratory') {
                 label = 'Laboratory';
                 count = users.filter(u => u.role === 'laboratory').length;
@@ -376,7 +387,7 @@ export default function AdminDashboard({ tab = 'dashboard', setTab, isMobile }) 
                 count = users.filter(u => u.role === 'station').length;
               } else {
                 label = 'Hospitals & Warehouses';
-                count = users.filter(u => u.role !== 'laboratory' && u.role !== 'station').length;
+                count = users.filter(u => u.role === 'hospital' || u.role === 'warehouse').length;
               }
 
               return (
@@ -415,7 +426,7 @@ export default function AdminDashboard({ tab = 'dashboard', setTab, isMobile }) 
 
           {loading && users.length === 0 ? (
             <p style={{ color: 'var(--text-secondary)' }}>Loading registries...</p>
-          ) : filteredUsers.length === 0 ? (
+          ) : filteredWorkstationUsers.length === 0 ? (
             <p style={{ color: 'var(--text-secondary)', fontStyle: 'italic', margin: '20px 0' }}>No workstation registrations found in this category.</p>
           ) : (
             <div className="table-container">
@@ -430,7 +441,7 @@ export default function AdminDashboard({ tab = 'dashboard', setTab, isMobile }) 
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredUsers.map(u => (
+                  {filteredWorkstationUsers.map(u => (
                     <tr key={u.id}>
                       <td data-label="Workstation Email" style={{ fontWeight: 600 }}>{u.email}</td>
                       <td data-label="Role Workspace">
@@ -467,6 +478,89 @@ export default function AdminDashboard({ tab = 'dashboard', setTab, isMobile }) 
                             </button>
                           )}
                         </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* USERS REGISTRY — all users including donors (read-only information) */}
+      {tab === 'users' && (
+        <div className="dashboard-card animate-fade-in">
+          <div className="dashboard-header" style={{ marginBottom: '16px' }}>
+            <h2>Registered Users Directory</h2>
+            <p>All registered accounts in the system — workstations and donors. Donors are auto-approved upon registration.</p>
+          </div>
+
+          {/* User category filter */}
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap', borderBottom: '1px solid var(--border-color)', paddingBottom: '14px' }}>
+            {['all', 'donor', 'station', 'laboratory', 'hospital', 'warehouse'].map(cat => {
+              const isActive = registryCategory === cat;
+              const count = cat === 'all' ? users.length : users.filter(u => u.role === cat).length;
+              const labels = { all: 'All Users', donor: 'Donors', station: 'Stations', laboratory: 'Laboratories', hospital: 'Hospitals', warehouse: 'Warehouses' };
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setRegistryCategory(cat)}
+                  style={{
+                    padding: '6px 14px',
+                    fontSize: '0.78rem',
+                    background: isActive ? 'var(--primary)' : 'var(--bg-surface)',
+                    color: isActive ? '#fff' : 'var(--text-secondary)',
+                    border: isActive ? '1px solid var(--primary)' : '1px solid var(--border-color)',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <span>{labels[cat]}</span>
+                  <span style={{ fontSize: '0.7rem', background: isActive ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)', padding: '1px 5px', borderRadius: '10px', fontWeight: 700 }}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {loading && users.length === 0 ? (
+            <p style={{ color: 'var(--text-secondary)' }}>Loading users...</p>
+          ) : (
+            <div className="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Name / Entity</th>
+                    <th>Status</th>
+                    <th>Joined</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(registryCategory === 'all' ? users : users.filter(u => u.role === registryCategory)).map(u => (
+                    <tr key={u.id}>
+                      <td style={{ fontWeight: 600 }}>{u.email}</td>
+                      <td>
+                        <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', background: 'rgba(255,255,255,0.04)', padding: '3px 8px', borderRadius: '4px', border: '1px solid var(--border-color)', fontWeight: 700 }}>
+                          {u.role}
+                        </span>
+                      </td>
+                      <td style={{ color: 'var(--text-secondary)' }}>{u.entity_name || u.donor?.name || '—'}</td>
+                      <td>
+                        <span className={`badge badge-${u.role === 'donor' ? 'approved' : (u.status || 'pending')}`}>
+                          {u.role === 'donor' ? 'active' : (u.status || 'pending')}
+                        </span>
+                      </td>
+                      <td style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                        {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
                       </td>
                     </tr>
                   ))}
@@ -635,13 +729,16 @@ export default function AdminDashboard({ tab = 'dashboard', setTab, isMobile }) 
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div style={{ flex: 1, minWidth: '180px' }}>
                   <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>Temporary New Password</label>
-                  <input
-                    type="text"
-                    placeholder="Enter temp password"
-                    value={tempPassword}
-                    onChange={(e) => setTempPassword(e.target.value)}
-                    style={{ width: '100%', boxSizing: 'border-box' }}
-                  />
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showTempPassword ? 'text' : 'password'}
+                      placeholder="Enter temp password"
+                      value={tempPassword}
+                      onChange={(e) => setTempPassword(e.target.value)}
+                      style={{ width: '100%', boxSizing: 'border-box', paddingRight: '42px' }}
+                    />
+                    <button type="button" onClick={() => setShowTempPassword((value) => !value)} title={showTempPassword ? 'Hide password' : 'Show password'} aria-label={showTempPassword ? 'Hide password' : 'Show password'} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0, display: 'flex' }}>{showTempPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+                  </div>
                 </div>
                 <button onClick={() => handleResolveReset(activeRequest.id)} className="btn btn-primary" style={{ height: '36px', background: '#f77f00', borderColor: '#f77f00', fontSize: '0.82rem' }} disabled={loading}>
                   Save & Resolve Ticket
