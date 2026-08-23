@@ -36,7 +36,7 @@ async function sendCodeEmail(toEmail, code, purpose) {
     } else {
       console.log(`[Brevo Mock] No API Key set. ${subject} to: ${toEmail} not delivered.`);
     }
-    return;
+    return false;
   }
 
   try {
@@ -72,11 +72,14 @@ async function sendCodeEmail(toEmail, code, purpose) {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("[Brevo Error Response]:", errorText);
-    } else {
-      console.log(`[Brevo Email Sent] ${subject} sent to ${toEmail}`);
+      return false;
     }
+
+    console.log(`[Brevo Email Sent] ${subject} sent to ${toEmail}`);
+    return true;
   } catch (err) {
     console.error("[Brevo Email Send Error]:", err.message);
+    return false;
   }
 }
 
@@ -105,11 +108,15 @@ async function registerVerifyEmail(req, res) {
     });
 
     // Send transactional email via Brevo
-    await sendCodeEmail(email, code, "email-verification");
+    const emailSent = await sendCodeEmail(email, code, "email-verification");
 
     // Dev-only convenience: codes are never logged unless explicitly enabled
     if (shouldLogOtp()) {
       console.log(`[EMAIL DEV MODE] Verification code for ${email}: ${code}`);
+    }
+
+    if (!emailSent) {
+      return res.status(500).json({ error: "Failed to send verification email. Please try again." });
     }
 
     res.json({
