@@ -1,18 +1,30 @@
-﻿const express = require('express');
+const express = require('express');
 const router = express.Router();
 const hospitalController = require('./hospital.controller');
 const { authenticateToken, requireRole } = require('../../shared/middleware/auth');
 
-router.get('/stock', authenticateToken, requireRole(['hospital']), hospitalController.getHospitalStock);
-router.get('/stock-levels', authenticateToken, requireRole(['hospital']), hospitalController.getWarehouseStockLevels);
-router.post('/requests', authenticateToken, requireRole(['hospital']), hospitalController.submitRequisition);
-router.get('/requests', authenticateToken, requireRole(['hospital']), hospitalController.getRequisitions);
-router.get('/emergency-patient/:fayda_id', authenticateToken, requireRole(['hospital']), hospitalController.emergencyPatientLookup);
-router.get('/inter-requests', authenticateToken, requireRole(['hospital']), hospitalController.getInterHospitalRequests);
-router.post('/inter-requests', authenticateToken, requireRole(['hospital']), hospitalController.createInterHospitalRequest);
-router.post('/inter-requests/:id/fulfill', authenticateToken, requireRole(['hospital']), hospitalController.fulfillInterHospitalRequest);
-router.get('/list', authenticateToken, requireRole(['hospital']), hospitalController.getHospitalList);
-router.get('/expiring-soon', authenticateToken, requireRole(['hospital']), hospitalController.getExpiringBags);
+const auth = [authenticateToken, requireRole(['hospital'])];
+
+router.get('/stock',                                       ...auth, hospitalController.getHospitalStock);
+router.get('/stock-levels',                                ...auth, hospitalController.getWarehouseStockLevels);
+router.post('/requests',                                   ...auth, hospitalController.submitRequisition);
+router.get('/requests',                                    ...auth, hospitalController.getRequisitions);
+
+// ─── Patient Lookup (Emergency Medical History) ────────────────────────────────
+// Kept for backward compatibility:
+router.get('/emergency-patient/:fayda_id',                 ...auth, hospitalController.emergencyPatientLookup);
+// New endpoints:
+router.get('/patient-lookup',                              ...auth, hospitalController.patientLookupByFaydaId);   // ?nationalId=...
+router.get('/patient-lookup-name',                         ...auth, hospitalController.patientLookupByName);      // ?fullName=...
+router.get('/patient-lookup/:faydaId/record',              ...auth, hospitalController.getPatientRecord);
+router.post('/patient-lookup/:faydaId/reveal-phone',       ...auth, hospitalController.revealPatientPhone);
+router.post('/patient-lookup/:faydaId/reveal-screening',   ...auth, hospitalController.revealScreeningDetails);
+
+// ─── H2H & Inventory ──────────────────────────────────────────────────────────
+router.get('/inter-requests',                              ...auth, hospitalController.getInterHospitalRequests);
+router.post('/inter-requests',                             ...auth, hospitalController.createInterHospitalRequest);
+router.post('/inter-requests/:id/fulfill',                 ...auth, hospitalController.fulfillInterHospitalRequest);
+router.get('/list',                                        ...auth, hospitalController.getHospitalList);
+router.get('/expiring-soon',                               ...auth, hospitalController.getExpiringBags);
 
 module.exports = router;
-

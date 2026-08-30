@@ -4,11 +4,17 @@
   "description": "Backend API server for Blood Bank Hub",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node src/index.js",
+    "test": "jest --testPathPatterns=tests/ --forceExit",
+    "start": "node init && node src/index.js",
     "prisma:generate": "prisma generate --schema=prisma/schema.prisma && prisma generate --schema=prisma/lab/schema.prisma",
     "prisma:push": "prisma db push --schema=prisma/schema.prisma && prisma db push --schema=prisma/lab/schema.prisma",
     "prisma:seed": "node prisma/seed.js"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/tests/**/*.test.js"
+    ]
   },
   "keywords": [],
   "author": "",
