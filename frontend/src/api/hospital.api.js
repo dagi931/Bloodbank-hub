@@ -99,4 +99,46 @@ export const hospitalApi = {
     });
     return handleResponse(response);
   },
+
+  // ─── Emergency Patient Medical History Lookup ─────────────────────────────
+  // Search by exact FAYDA National ID
+  patientLookupByNationalId: async (nationalId) => {
+    const response = await fetch(
+      `${BASE_URL}/hospital/patient-lookup?nationalId=${encodeURIComponent(nationalId)}`,
+      { method: 'GET', headers: getHeaders() }
+    );
+    return handleResponse(response);
+  },
+  // Search by partial full name (returns disambiguation list)
+  patientLookupByName: async (fullName) => {
+    const response = await fetch(
+      `${BASE_URL}/hospital/patient-lookup-name?fullName=${encodeURIComponent(fullName)}`,
+      { method: 'GET', headers: getHeaders() }
+    );
+    return handleResponse(response);
+  },
+  // Fetch full summary card for a confirmed FAYDA ID
+  getPatientRecord: async (faydaId) => {
+    const response = await fetch(
+      `${BASE_URL}/hospital/patient-lookup/${encodeURIComponent(faydaId)}/record`,
+      { method: 'GET', headers: getHeaders() }
+    );
+    return handleResponse(response);
+  },
+  // Reveal unmasked phone (generates a separate audit log entry)
+  revealPatientPhone: async (faydaId) => {
+    const response = await fetch(
+      `${BASE_URL}/hospital/patient-lookup/${encodeURIComponent(faydaId)}/reveal-phone`,
+      { method: 'POST', headers: getHeaders() }
+    );
+    return handleResponse(response);
+  },
+  // Reveal full screening details (generates a separate audit log entry)
+  revealScreeningDetails: async (faydaId) => {
+    const response = await fetch(
+      `${BASE_URL}/hospital/patient-lookup/${encodeURIComponent(faydaId)}/reveal-screening`,
+      { method: 'POST', headers: getHeaders() }
+    );
+    return handleResponse(response);
+  },
 };

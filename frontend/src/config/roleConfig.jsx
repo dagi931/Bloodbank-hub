@@ -14,6 +14,7 @@ import {
   Megaphone,
   MessageSquare,
   Package,
+  Search,
   Shield,
   Stethoscope,
   Truck,
@@ -143,12 +144,14 @@ export const ROLE_CONFIG = {
       { id: 'request', label: 'Request Blood', icon: <Truck size={16} /> },
       { id: 'patients', label: 'Patients', icon: <Stethoscope size={16} /> },
       { id: 'stock', label: 'Available Stock', icon: <Package size={16} /> },
+      { id: 'lookup', label: 'Emergency Lookup', icon: <Search size={16} /> },
     ],
     searchCatalog: [
       { title: 'Central Requisition Order', category: 'Orders', tab: 'request', desc: 'Order blood from central warehouse' },
       { title: 'My Active Blood Requests', category: 'Tracking', tab: 'request', desc: 'Status of dispatched blood orders' },
       { title: 'Hospital Patients (HMS)', category: 'Patients', tab: 'patients', desc: 'Admit patients and assign blood units' },
       { title: 'Facility Blood Reserve', category: 'Stock', tab: 'stock', desc: 'On-site refrigeration inventory' },
+      { title: 'Emergency Patient Lookup', category: 'Emergency', tab: 'lookup', desc: 'Search donor medical history by FAYDA ID or name' },
     ],
   },
 };

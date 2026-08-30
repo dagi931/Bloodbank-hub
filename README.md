@@ -166,6 +166,13 @@ During intake at donation stations, donors can choose to opt-in or opt-out of em
 ### Rare Blood Type Broadcast Alerts
 When a warehouse has zero stock of a critical, rare blood type, hospitals can trigger an emergency broadcast. This system finds local, eligible, opted-in donors of that specific blood type and dispatches simulated group SMS alerts via the SMSEthiopia API. It prevents donor fatigue by applying a 24-hour rate limit on alerts for the same request.
 
+### Emergency Patient Medical History Lookup
+During trauma or hemorrhage emergencies, authorized hospital staff can instantly pull up the stored blood and medical history of any registered donor. The dedicated **"Emergency Lookup"** tab on the Hospital Dashboard supports two search modes: exact match on **FAYDA National ID** and partial, case-insensitive **Full Name** matching — with a disambiguation list when multiple donors share a similar name.
+
+The result is a concise, scannable **summary card** showing: blood type (ABO + Rh), donor eligibility status (Eligible / Temporarily Deferred / Permanently Deferred) derived from `health_status` and the 90-day donation interval, and a generic **screening status badge** ("Cleared" or "Requires Review") without exposing specific disease markers by default. Phone numbers are **masked** and require a separate "Reveal" click. Full laboratory screening details (disease markers, hemoglobin, platelets, allergies) require a second confirmation step. Both reveal actions generate distinct audit log entries.
+
+To prevent misuse, each hospital account is **rate-limited to 10 lookups per 30-minute window**; exceeding the limit returns an anomaly flag and a `429` response. Sensitive cards **auto-clear after 3 minutes of inactivity**. Screening results older than 180 days are flagged as outdated with a recommendation to re-screen. Every lookup — search, record view, phone reveal, and screening reveal — is written to the centralized **audit log** capturing: staff user ID, timestamp, searched identifier, and fields revealed.
+
 ---
 
 ## 4. Technology Stack
