@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Package, Truck, MessageSquare, AlertTriangle, ShieldCheck, Search, PlusCircle,
   RefreshCw, Send, Check, ShieldAlert, Stethoscope, UserPlus, ClipboardList, X,
-  CheckCircle, Droplet, Clock, ArrowRight, CheckCircle2, Users, Building, AlertCircle, Calendar
+  CheckCircle, Droplet, Clock, ArrowRight, CheckCircle2, Users, Building, AlertCircle,
+  Calendar, Eye, EyeOff, ShieldX, Activity, Info
 } from 'lucide-react';
 import { api } from '../../api';
 import SelectDropdown from '../../components/ui/SelectDropdown';
@@ -17,6 +18,23 @@ export default function HospitalDashboard({ tab = 'dashboard', setTab, isMobile 
   const [lookupFaydaId, setLookupFaydaId] = useState('');
   const [lookupSearched, setLookupSearched] = useState(false);
   const [lookupError, setLookupError] = useState(null);
+
+  // ─── Emergency Lookup tab state ──────────────────────────────────────────────
+  const [lookupQuery, setLookupQuery] = useState('');
+  const [lookupMode, setLookupMode] = useState('fayda'); // 'fayda' | 'name'
+  const [lookupResults, setLookupResults] = useState([]); // disambiguation list
+  const [lookupRecord, setLookupRecord] = useState(null); // full summary card
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupMsg, setLookupMsg] = useState(null); // info/error/success message
+  const [revealedPhone, setRevealedPhone] = useState(null);
+  const [screeningDetails, setScreeningDetails] = useState(null);
+  const [showScreeningConfirm, setShowScreeningConfirm] = useState(false);
+  const [lookupRateLimited, setLookupRateLimited] = useState(false);
+  // Auto-clear timer: sensitive card clears after 3 minutes of inactivity
+  const autoClearTimer = useRef(null);
+  const AUTO_CLEAR_SECS = 180;
+  const [autoClearCountdown, setAutoClearCountdown] = useState(null);
+  const countdownRef = useRef(null);
 
   // Form states
   const [reqBloodType, setReqBloodType] = useState('O+');
@@ -253,6 +271,126 @@ export default function HospitalDashboard({ tab = 'dashboard', setTab, isMobile 
     } finally {
       setHmsLoading(false);
     }
+  };
+
+  // ─── Emergency Lookup handlers ───────────────────────────────────────────────
+  const resetAutoClear = useCallback(() => {
+    if (autoClearTimer.current) clearTimeout(autoClearTimer.current);
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    setAutoClearCountdown(AUTO_CLEAR_SECS);
+    let remaining = AUTO_CLEAR_SECS;
+    countdownRef.current = setInterval(() => {
+      remaining -= 1;
+      setAutoClearCountdown(remaining);
+      if (remaining <= 0) clearInterval(countdownRef.current);
+    }, 1000);
+    autoClearTimer.current = setTimeout(() => {
+      setLookupRecord(null);
+      setRevealedPhone(null);
+      setScreeningDetails(null);
+      setAutoClearCountdown(null);
+    }, AUTO_CLEAR_SECS * 1000);
+  }, []);
+
+  // Clear auto-timer when leaving lookup tab
+  useEffect(() => {
+    if (tab !== 'lookup') {
+      if (autoClearTimer.current) clearTimeout(autoClearTimer.current);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      setAutoClearCountdown(null);
+    }
+  }, [tab]);
+
+  const handlePatientLookup = async (e) => {
+    e.preventDefault();
+    if (!lookupQuery.trim()) return;
+    setLookupLoading(true);
+    setLookupMsg(null);
+    setLookupResults([]);
+    setLookupRecord(null);
+    setRevealedPhone(null);
+    setScreeningDetails(null);
+    setLookupRateLimited(false);
+    try {
+      let res;
+      if (lookupMode === 'fayda') {
+        res = await api.hospital.patientLookupByNationalId(lookupQuery.trim());
+      } else {
+        res = await api.hospital.patientLookupByName(lookupQuery.trim());
+      }
+      if (!res.found || !res.results?.length) {
+        setLookupMsg({ type: 'notfound', text: res.message || 'No records found matching your search.' });
+      } else if (res.results.length === 1) {
+        // Skip disambiguation — go straight to full record
+        await handleSelectRecord(res.results[0].fayda_id);
+      } else {
+        setLookupResults(res.results);
+        setLookupMsg({ type: 'info', text: `${res.results.length} records match. Select the correct patient below.` });
+      }
+    } catch (err) {
+      if (err.message?.includes('Too many lookups') || err.message?.includes('429')) {
+        setLookupRateLimited(true);
+        setLookupMsg({ type: 'error', text: 'Rate limit reached: too many lookups. Please wait 30 minutes.' });
+      } else {
+        setLookupMsg({ type: 'error', text: err.message || 'Search failed. Please try again.' });
+      }
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
+  const handleSelectRecord = async (faydaId) => {
+    setLookupLoading(true);
+    setLookupMsg(null);
+    setLookupResults([]);
+    setRevealedPhone(null);
+    setScreeningDetails(null);
+    try {
+      const card = await api.hospital.getPatientRecord(faydaId);
+      setLookupRecord(card);
+      resetAutoClear();
+    } catch (err) {
+      setLookupMsg({ type: 'error', text: err.message || 'Could not load patient record.' });
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
+  const handleRevealPhone = async () => {
+    if (!lookupRecord) return;
+    try {
+      const res = await api.hospital.revealPatientPhone(lookupRecord.fayda_id);
+      setRevealedPhone(res.phone);
+      resetAutoClear();
+    } catch (err) {
+      setLookupMsg({ type: 'error', text: 'Could not reveal phone number.' });
+    }
+  };
+
+  const handleRevealScreening = async () => {
+    if (!lookupRecord) return;
+    setShowScreeningConfirm(false);
+    try {
+      const res = await api.hospital.revealScreeningDetails(lookupRecord.fayda_id);
+      setScreeningDetails(res);
+      resetAutoClear();
+    } catch (err) {
+      setLookupMsg({ type: 'error', text: 'Could not reveal screening details.' });
+    }
+  };
+
+  const clearLookup = () => {
+    setLookupQuery('');
+    setLookupResults([]);
+    setLookupRecord(null);
+    setRevealedPhone(null);
+    setScreeningDetails(null);
+    setLookupMsg(null);
+    setShowScreeningConfirm(false);
+    setLookupRateLimited(false);
+    if (autoClearTimer.current) clearTimeout(autoClearTimer.current);
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    setAutoClearCountdown(null);
   };
 
   const totalLocalStock = internalStock.reduce((a, b) => a + (b.quantity || 0), 0);
@@ -983,6 +1121,296 @@ export default function HospitalDashboard({ tab = 'dashboard', setTab, isMobile 
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* ─── EMERGENCY PATIENT LOOKUP TAB ─────────────────────────────────────── */}
+      {tab === 'lookup' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+            <div className="dashboard-header">
+              <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(239,35,60,0.12)', color: '#ef233c', padding: '3px 10px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.04em', animation: 'pulse 2s infinite' }}>
+                  🚨 EMERGENCY
+                </span>
+                Patient Medical History Lookup
+              </h2>
+              <p>Search registered donor records by FAYDA National ID or Full Name. Every lookup is audit-logged.</p>
+            </div>
+            {lookupRecord && (
+              <button onClick={clearLookup} className="btn btn-outline" style={{ fontSize: '0.78rem', padding: '6px 14px' }}>
+                <X size={14} /> Clear Record
+              </button>
+            )}
+          </div>
+
+          {/* Auto-clear countdown banner */}
+          {autoClearCountdown !== null && lookupRecord && (
+            <div style={{ background: 'rgba(239,35,60,0.06)', border: '1px solid rgba(239,35,60,0.2)', borderRadius: '8px', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.8rem', color: '#ef233c' }}>
+              <Clock size={14} />
+              <span>Sensitive data auto-clears in <strong>{Math.floor(autoClearCountdown / 60)}:{String(autoClearCountdown % 60).padStart(2, '0')}</strong> due to inactivity.</span>
+            </div>
+          )}
+
+          {/* Rate limit warning */}
+          {lookupRateLimited && (
+            <div style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: '8px', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.83rem', color: '#b45309' }}>
+              <ShieldX size={16} />
+              <span>Too many lookups from this account. Anomaly flag logged. Please wait 30 minutes before searching again.</span>
+            </div>
+          )}
+
+          {/* Search form */}
+          <div className="dashboard-card animate-fade-in" style={{ borderTop: '4px solid #ef233c' }}>
+            <form onSubmit={handlePatientLookup} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* Mode toggle */}
+              <div style={{ display: 'flex', gap: '8px', background: 'var(--bg-main)', padding: '4px', borderRadius: '8px', width: 'fit-content', border: '1px solid var(--border-color)' }}>
+                <button
+                  type="button"
+                  onClick={() => { setLookupMode('fayda'); setLookupQuery(''); setLookupResults([]); setLookupMsg(null); }}
+                  style={{ padding: '6px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 700, transition: 'all 0.15s', background: lookupMode === 'fayda' ? 'var(--primary, #ef233c)' : 'transparent', color: lookupMode === 'fayda' ? '#fff' : 'var(--text-secondary)' }}
+                >
+                  🪪 FAYDA ID (Exact)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setLookupMode('name'); setLookupQuery(''); setLookupResults([]); setLookupMsg(null); }}
+                  style={{ padding: '6px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 700, transition: 'all 0.15s', background: lookupMode === 'name' ? 'var(--primary, #ef233c)' : 'transparent', color: lookupMode === 'name' ? '#fff' : 'var(--text-secondary)' }}
+                >
+                  👤 Full Name (Fuzzy)
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <input
+                  id="lookup-query-input"
+                  type="text"
+                  placeholder={lookupMode === 'fayda' ? 'Enter FAYDA National ID exactly (e.g. FAY-12345)' : 'Enter patient full name or partial name...'}
+                  value={lookupQuery}
+                  onChange={(e) => setLookupQuery(e.target.value)}
+                  style={{ flex: 1 }}
+                  autoComplete="off"
+                  required
+                />
+                <button
+                  id="lookup-search-btn"
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={lookupLoading || lookupRateLimited || !lookupQuery.trim()}
+                  style={{ whiteSpace: 'nowrap', background: '#ef233c', borderColor: '#ef233c' }}
+                >
+                  {lookupLoading ? <RefreshCw size={15} style={{ animation: 'spin 1s linear infinite' }} /> : <Search size={15} />}
+                  {lookupLoading ? 'Searching...' : 'Search'}
+                </button>
+              </div>
+
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: 0 }}>
+                <Info size={11} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
+                All searches are logged to the audit trail with your staff ID and timestamp. Limit: 10 lookups per 30 minutes.
+              </p>
+            </form>
+          </div>
+
+          {/* Status message (info / not found / error) */}
+          {lookupMsg && (
+            <div style={{
+              background: lookupMsg.type === 'error' ? 'rgba(239,35,60,0.08)' : lookupMsg.type === 'notfound' ? 'rgba(107,114,128,0.08)' : 'rgba(58,134,255,0.08)',
+              border: `1px solid ${lookupMsg.type === 'error' ? 'rgba(239,35,60,0.25)' : lookupMsg.type === 'notfound' ? 'rgba(107,114,128,0.25)' : 'rgba(58,134,255,0.25)'}`,
+              borderRadius: '8px', padding: '12px 16px', fontSize: '0.84rem',
+              color: lookupMsg.type === 'error' ? '#ef233c' : lookupMsg.type === 'notfound' ? 'var(--text-secondary)' : '#3a86ff',
+              display: 'flex', alignItems: 'flex-start', gap: '10px'
+            }}>
+              {lookupMsg.type === 'notfound' ? <ShieldX size={16} style={{ flexShrink: 0, marginTop: '1px' }} /> : <Info size={16} style={{ flexShrink: 0, marginTop: '1px' }} />}
+              <span>{lookupMsg.text}</span>
+            </div>
+          )}
+
+          {/* Disambiguation list */}
+          {lookupResults.length > 1 && (
+            <div className="dashboard-card animate-fade-in">
+              <div className="dashboard-card-title" style={{ marginBottom: '14px' }}>
+                <span>Select the Correct Patient</span>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{lookupResults.length} matches</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {lookupResults.map((r) => (
+                  <button
+                    key={r.fayda_id}
+                    onClick={() => handleSelectRecord(r.fayda_id)}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--bg-main)', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s', gap: '12px' }}
+                    onMouseEnter={e => e.currentTarget.style.borderColor = '#ef233c'}
+                    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-color)'}
+                  >
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-primary)' }}>{r.name}</div>
+                      <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        DOB: {r.dob ? new Date(r.dob).toLocaleDateString() : 'N/A'} &nbsp;·&nbsp; {r.gender} &nbsp;·&nbsp; FAYDA: {r.fayda_id_masked}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ background: 'rgba(13,148,136,0.1)', color: '#0d9488', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, fontSize: '0.72rem' }}>{r.blood_type}</span>
+                      <ArrowRight size={15} color="var(--text-muted)" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Summary card */}
+          {lookupRecord && (() => {
+            const r = lookupRecord;
+            const eligColor = r.eligibility?.status === 'Eligible' ? '#06d6a0' : r.eligibility?.status === 'Temporarily Deferred' ? '#f59e0b' : '#ef233c';
+            const eligBadge = r.eligibility?.status === 'Eligible' ? 'approved' : r.eligibility?.status === 'Temporarily Deferred' ? 'collected' : 'pending';
+            const screenColor = r.screening?.status === 'Cleared' ? '#06d6a0' : r.screening?.status === 'Requires Review' ? '#f59e0b' : 'var(--text-muted)';
+            return (
+              <div className="dashboard-card animate-fade-in" style={{ borderTop: `4px solid ${eligColor}` }}>
+                {/* Card header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+                  <div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>{r.name}</div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '3px' }}>
+                      FAYDA: {r.fayda_id} &nbsp;·&nbsp; DOB: {r.dob || 'N/A'} ({r.age ? `${r.age} yrs` : 'N/A'}) &nbsp;·&nbsp; {r.gender}
+                    </div>
+                  </div>
+                  <span style={{ background: 'rgba(13,148,136,0.1)', color: '#0d9488', padding: '6px 14px', borderRadius: '8px', fontWeight: 900, fontSize: '1.05rem' }}>
+                    {r.blood_type}
+                  </span>
+                </div>
+
+                {/* Status badges row */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '20px' }}>
+                  {/* Eligibility */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Eligibility</span>
+                    <span className={`badge badge-${eligBadge}`} style={{ fontSize: '0.78rem', padding: '4px 12px' }}>
+                      {r.eligibility?.status === 'Eligible' ? '✓ Eligible' : r.eligibility?.status === 'Temporarily Deferred' ? '⏳ Temporarily Deferred' : '✗ Permanently Deferred'}
+                    </span>
+                    {r.eligibility?.reason && (
+                      <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', maxWidth: '220px' }}>{r.eligibility.reason}</span>
+                    )}
+                  </div>
+
+                  {/* Screening */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Screening</span>
+                    <span style={{ background: `${screenColor}18`, color: screenColor, padding: '4px 12px', borderRadius: '20px', fontSize: '0.78rem', fontWeight: 700, border: `1px solid ${screenColor}40` }}>
+                      {r.screening?.status === 'Cleared' ? '✓ Screening: Cleared' : r.screening?.status === 'Requires Review' ? '⚠ Screening: Requires Review' : '— No Screening on File'}
+                    </span>
+                    {r.screening?.outdated && (
+                      <span style={{ fontSize: '0.68rem', color: '#f59e0b', fontWeight: 600 }}>⚠ Data outdated — recommend re-screening</span>
+                    )}
+                    {r.screening?.last_updated && (
+                      <span style={{ fontSize: '0.67rem', color: 'var(--text-muted)' }}>Last: {new Date(r.screening.last_updated).toLocaleDateString()}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Details grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '14px', marginBottom: '18px' }}>
+                  <div style={{ background: 'var(--bg-main)', borderRadius: '8px', padding: '12px', border: '1px solid var(--border-color)' }}>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>Last Donation</div>
+                    {r.last_donation_date
+                      ? <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.88rem' }}>{new Date(r.last_donation_date).toLocaleDateString()}</span>
+                      : <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.82rem' }}>No donation history on file</span>
+                    }
+                  </div>
+                  <div style={{ background: 'var(--bg-main)', borderRadius: '8px', padding: '12px', border: '1px solid var(--border-color)' }}>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>Emergency Contact (Phone)</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {revealedPhone
+                        ? <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.88rem', letterSpacing: '0.05em' }}>{revealedPhone}</span>
+                        : <span style={{ fontFamily: 'monospace', color: 'var(--text-secondary)', fontSize: '0.88rem' }}>{r.phone_masked || 'N/A'}</span>
+                      }
+                      {!revealedPhone && r.phone_masked && (
+                        <button
+                          id="reveal-phone-btn"
+                          onClick={handleRevealPhone}
+                          title="Reveal phone number (will be audit logged)"
+                          style={{ background: 'none', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer', padding: '3px 8px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: 'var(--text-secondary)' }}
+                        >
+                          <Eye size={12} /> Reveal
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Reveal screening details section */}
+                {!screeningDetails && r.has_lab_record && (
+                  <div>
+                    {!showScreeningConfirm ? (
+                      <button
+                        id="reveal-screening-btn"
+                        onClick={() => setShowScreeningConfirm(true)}
+                        style={{ background: 'rgba(58,134,255,0.07)', border: '1px solid rgba(58,134,255,0.25)', borderRadius: '8px', padding: '10px 16px', cursor: 'pointer', fontSize: '0.8rem', color: '#3a86ff', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', width: '100%', justifyContent: 'center', transition: 'all 0.15s' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(58,134,255,0.13)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(58,134,255,0.07)'}
+                      >
+                        <ShieldCheck size={15} /> View Detailed Screening Results (Audit Logged)
+                      </button>
+                    ) : (
+                      <div style={{ background: 'rgba(239,35,60,0.06)', border: '1px solid rgba(239,35,60,0.2)', borderRadius: '8px', padding: '14px 16px' }}>
+                        <p style={{ margin: '0 0 12px 0', fontSize: '0.83rem', color: 'var(--text-primary)', fontWeight: 600 }}>
+                          ⚠ Confirming will reveal specific screening results and generate an audit log entry. Proceed?
+                        </p>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button id="confirm-reveal-screening-btn" onClick={handleRevealScreening} className="btn btn-primary" style={{ fontSize: '0.78rem', padding: '6px 14px', background: '#ef233c', borderColor: '#ef233c' }}>
+                            Confirm & Reveal
+                          </button>
+                          <button onClick={() => setShowScreeningConfirm(false)} className="btn btn-outline" style={{ fontSize: '0.78rem', padding: '6px 14px' }}>
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Revealed screening details */}
+                {screeningDetails && (
+                  <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '16px', marginTop: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                      <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Activity size={14} color="#ef233c" /> Detailed Screening Results
+                        <span style={{ fontSize: '0.65rem', background: 'rgba(239,35,60,0.1)', color: '#ef233c', padding: '1px 6px', borderRadius: '10px', fontWeight: 800 }}>SENSITIVE</span>
+                      </span>
+                      <button onClick={() => setScreeningDetails(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px' }}>
+                        <EyeOff size={13} />
+                      </button>
+                    </div>
+                    {screeningDetails.lab ? (
+                      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '10px', fontSize: '0.8rem' }}>
+                        {[
+                          ['Disease Markers', screeningDetails.lab.diseases],
+                          ['Hemoglobin', screeningDetails.lab.hemoglobin],
+                          ['Platelets', screeningDetails.lab.platelets],
+                          ['Allergies', screeningDetails.lab.allergies],
+                          ['Clinical Notes', screeningDetails.lab.notes],
+                        ].map(([label, val]) => val ? (
+                          <div key={label} style={{ background: 'var(--bg-surface)', borderRadius: '6px', padding: '10px 12px', border: '1px solid var(--border-color)' }}>
+                            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>{label}</div>
+                            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{val}</div>
+                          </div>
+                        ) : null)}
+                        {screeningDetails.sample_notes && (
+                          <div style={{ gridColumn: '1 / -1', background: 'var(--bg-surface)', borderRadius: '6px', padding: '10px 12px', border: '1px solid var(--border-color)' }}>
+                            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Station Health Notes</div>
+                            <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{screeningDetails.sample_notes}</div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>No detailed lab record available in the laboratory database.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
         </div>
       )}
 

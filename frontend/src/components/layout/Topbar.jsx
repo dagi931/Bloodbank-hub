@@ -526,7 +526,7 @@ export default function Topbar({
                   width: '100%',
                   boxSizing: 'border-box',
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-main)')}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-card-hover)')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
               >
                 <User size={15} /> My Profile
