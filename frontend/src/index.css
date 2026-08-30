@@ -9,29 +9,29 @@
   --bg-surface: #14141a;
   --bg-card: rgba(26, 26, 36, 0.7);
   --bg-card-hover: rgba(36, 36, 48, 0.85);
-  --border-color: rgba(255, 255, 255, 0.08);
-  --input-bg: rgba(20, 20, 26, 0.6);
-  --input-border: rgba(255, 255, 255, 0.1);
-  --bg-hover: rgba(255, 255, 255, 0.015);
-  --btn-secondary-bg: rgba(255, 255, 255, 0.06);
+  --border-color: rgba(255, 255, 255, 0.14);
+  --input-bg: rgba(11, 11, 14, 0.9);
+  --input-border: rgba(255, 255, 255, 0.16);
+  --bg-hover: rgba(255, 255, 255, 0.04);
+  --btn-secondary-bg: rgba(255, 255, 255, 0.07);
   
-  --primary: #e63946;
-  --primary-hover: #ff4d5a;
-  --primary-rgb: 230, 57, 70;
+  --primary: #ff5b69;
+  --primary-hover: #ff707e;
+  --primary-rgb: 255, 91, 105;
   
   --secondary: #2b2d42;
   --secondary-hover: #3d405b;
   
   --text-primary: #f8f9fa;
   --text-main: var(--text-primary);
-  --text-secondary: #a2a8b6;
-  --text-muted: #6c757d;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
   
   /* Status Colors */
-  --color-success: #06d6a0;
-  --color-warning: #ffd166;
-  --color-danger: #ef233c;
-  --color-info: #4ea8de;
+  --color-success: #10b981;
+  --color-warning: #fbbf24;
+  --color-danger: #ff5b69;
+  --color-info: #60a5fa;
   
   /* UI Constants */
   --border-radius-sm: 8px;
@@ -47,11 +47,11 @@
   --transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Role-Specific Theme Accents */
+/* Role-Specific Theme Accents (Default / Light) */
 .theme-admin {
-  --primary: #ef233c;
-  --primary-hover: #d90429;
-  --primary-rgb: 239, 35, 60;
+  --primary: #d90429;
+  --primary-hover: #ef233c;
+  --primary-rgb: 217, 4, 41;
   --sidebar-bg: #0f172a;
 }
 
@@ -90,6 +90,49 @@
   --sidebar-bg: #134e5e;
 }
 
+/* Role-Specific Theme Accents in Dark Mode (High-contrast, accessible) */
+:root.dark .theme-admin,
+:root:not(.light) .theme-admin {
+  --primary: #ff5b69;
+  --primary-hover: #ff707e;
+  --primary-rgb: 255, 91, 105;
+}
+
+:root.dark .theme-donor,
+:root:not(.light) .theme-donor {
+  --primary: #ff5b69;
+  --primary-hover: #ff707e;
+  --primary-rgb: 255, 91, 105;
+}
+
+:root.dark .theme-station,
+:root:not(.light) .theme-station {
+  --primary: #3b82f6;
+  --primary-hover: #60a5fa;
+  --primary-rgb: 59, 130, 246;
+}
+
+:root.dark .theme-laboratory,
+:root:not(.light) .theme-laboratory {
+  --primary: #a78bfa;
+  --primary-hover: #c4b5fd;
+  --primary-rgb: 167, 139, 250;
+}
+
+:root.dark .theme-warehouse,
+:root:not(.light) .theme-warehouse {
+  --primary: #10b981;
+  --primary-hover: #34d399;
+  --primary-rgb: 16, 185, 129;
+}
+
+:root.dark .theme-hospital,
+:root:not(.light) .theme-hospital {
+  --primary: #14b8a6;
+  --primary-hover: #2dd4bf;
+  --primary-rgb: 20, 184, 166;
+}
+
 :root.light {
   /* LIGHT THEME TOKENS */
   --bg-main: #f4f5f8;
@@ -113,6 +156,12 @@
   --text-main: var(--text-primary);
   --text-secondary: #4a5568;
   --text-muted: #718096;
+
+  /* Status Colors */
+  --color-success: #06d6a0;
+  --color-warning: #d97706;
+  --color-danger: #ef233c;
+  --color-info: #2563eb;
 }
 
 /* Explicit dark mode (when theme class is 'dark') */
@@ -121,23 +170,29 @@
   --bg-surface: #14141a;
   --bg-card: rgba(26, 26, 36, 0.7);
   --bg-card-hover: rgba(36, 36, 48, 0.85);
-  --border-color: rgba(255, 255, 255, 0.08);
-  --input-bg: rgba(20, 20, 26, 0.8);
-  --input-border: rgba(255, 255, 255, 0.12);
-  --bg-hover: rgba(255, 255, 255, 0.015);
-  --btn-secondary-bg: rgba(255, 255, 255, 0.06);
+  --border-color: rgba(255, 255, 255, 0.14);
+  --input-bg: rgba(11, 11, 14, 0.9);
+  --input-border: rgba(255, 255, 255, 0.16);
+  --bg-hover: rgba(255, 255, 255, 0.04);
+  --btn-secondary-bg: rgba(255, 255, 255, 0.07);
   
-  --primary: #e63946;
-  --primary-hover: #ff4d5a;
-  --primary-rgb: 230, 57, 70;
+  --primary: #ff5b69;
+  --primary-hover: #ff707e;
+  --primary-rgb: 255, 91, 105;
   
   --secondary: #2b2d42;
   --secondary-hover: #3d405b;
   
   --text-primary: #f8f9fa;
   --text-main: var(--text-primary);
-  --text-secondary: #a2a8b6;
-  --text-muted: #6c757d;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+
+  /* Status Colors */
+  --color-success: #10b981;
+  --color-warning: #fbbf24;
+  --color-danger: #ff5b69;
+  --color-info: #60a5fa;
 }
 
 * {
@@ -213,6 +268,11 @@ input, select, textarea {
   font-size: 0.95rem;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
   outline: none;
+}
+
+::placeholder {
+  color: var(--text-muted);
+  opacity: 0.85;
 }
 
 select {
@@ -297,6 +357,17 @@ label {
 .btn-secondary:hover {
   background: var(--bg-hover);
   border-color: var(--border-color);
+}
+
+.btn-outline {
+  background: var(--btn-secondary-bg);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.btn-outline:hover {
+  background: var(--bg-hover);
+  border-color: var(--text-secondary);
 }
 
 .btn-danger {

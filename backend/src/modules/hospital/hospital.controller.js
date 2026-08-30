@@ -1,4 +1,119 @@
 const { mainDb, labDb } = require("../../config/prisma");
+const { logAction } = require('../../shared/services/audit.service');
+
+// ─── In-memory rate limiter (per hospital user ID) ────────────────────────────
+// Allows at most LOOKUP_LIMIT lookups per LOOKUP_WINDOW_MS per account.
+const LOOKUP_LIMIT = 10;
+const LOOKUP_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
+const lookupBuckets = new Map(); // userId → { count, windowStart }
+
+function checkRateLimit(userId) {
+  const now = Date.now();
+  const bucket = lookupBuckets.get(userId);
+  if (!bucket || now - bucket.windowStart > LOOKUP_WINDOW_MS) {
+    lookupBuckets.set(userId, { count: 1, windowStart: now });
+    return true; // allowed
+  }
+  if (bucket.count >= LOOKUP_LIMIT) return false; // blocked
+  bucket.count += 1;
+  return true;
+}
+
+// ─── Shared helper: derive eligibility from health_status + donation interval ─
+const DONATION_INTERVAL_DAYS = 90;
+function deriveEligibility(donor) {
+  if (donor.health_status === 'defective') {
+    return { status: 'Permanently Deferred', reason: 'Health record flagged by laboratory' };
+  }
+  if (donor.last_donation_date) {
+    const daysSince = Math.floor(
+      (Date.now() - new Date(donor.last_donation_date).getTime()) / 86400000
+    );
+    if (daysSince < DONATION_INTERVAL_DAYS) {
+      return {
+        status: 'Temporarily Deferred',
+        reason: `Last donation ${daysSince} days ago — ${DONATION_INTERVAL_DAYS - daysSince} days remaining`,
+      };
+    }
+  }
+  return { status: 'Eligible', reason: null };
+}
+
+// ─── Shared helper: build the public summary card from donor + samples ─────────
+const SCREENING_VALIDITY_DAYS = 180;
+async function buildSummaryCard(donor) {
+  // Most recent validated (or any) blood sample for this donor
+  const latestSample = await mainDb.bloodSample.findFirst({
+    where: { fayda_id: donor.fayda_id },
+    orderBy: { collected_at: 'desc' },
+    select: { status: true, health_notes: true, collected_at: true },
+  });
+
+  // Lab medical record (separate DB)
+  let labRecord = null;
+  try {
+    labRecord = await labDb.labMedicalRecord.findUnique({
+      where: { faydaId: donor.fayda_id },
+    });
+  } catch (_) {
+    // Lab DB may be unreachable — degrade gracefully
+  }
+
+  const eligibility = deriveEligibility(donor);
+
+  // Screening status — generic flag only
+  let screeningStatus = 'No Screening on File';
+  let screeningOutdated = false;
+  if (latestSample) {
+    const daysSince = Math.floor(
+      (Date.now() - new Date(latestSample.collected_at).getTime()) / 86400000
+    );
+    screeningOutdated = daysSince > SCREENING_VALIDITY_DAYS;
+    screeningStatus =
+      latestSample.status === 'validated'
+        ? 'Cleared'
+        : latestSample.status === 'discarded'
+        ? 'Requires Review'
+        : 'Pending';
+  } else if (labRecord) {
+    screeningStatus = 'Cleared'; // lab record exists = was cleared at some point
+    const daysSince = Math.floor(
+      (Date.now() - new Date(labRecord.updatedAt).getTime()) / 86400000
+    );
+    screeningOutdated = daysSince > SCREENING_VALIDITY_DAYS;
+  }
+
+  // Age from DOB
+  const dob = donor.dob ? new Date(donor.dob) : null;
+  const age = dob
+    ? Math.floor((Date.now() - dob.getTime()) / (365.25 * 86400000))
+    : null;
+
+  // Mask phone: show first 4 digits + bullets
+  const maskedPhone = donor.phone
+    ? donor.phone.replace(/(\+?\d{4})\d+(\d{2})/, '$1•••••$2')
+    : null;
+
+  return {
+    fayda_id: donor.fayda_id,
+    name: donor.name,
+    dob: dob ? dob.toISOString().split('T')[0] : null,
+    age,
+    gender: donor.gender,
+    blood_type: donor.blood_type,
+    address: donor.address,
+    phone_masked: maskedPhone,
+    last_donation_date: donor.last_donation_date || null,
+    eligibility,
+    screening: {
+      status: screeningStatus,
+      outdated: screeningOutdated,
+      last_updated: latestSample?.collected_at || labRecord?.updatedAt || null,
+    },
+    has_lab_record: !!labRecord,
+    has_donation_history: !!latestSample,
+  };
+}
 
 // Get this hospital's internal stock levels
 async function getHospitalStock(req, res) {
@@ -96,54 +211,194 @@ async function getRequisitions(req, res) {
   }
 }
 
-// Emergency patient medical history lookup: Queries the independent Laboratory Database (PostgreSQL)
-async function emergencyPatientLookup(req, res) {
-  const { fayda_id } = req.params;
+// ─── ENDPOINT: Search by FAYDA National ID (exact match) ─────────────────────
+async function patientLookupByFaydaId(req, res) {
+  const { nationalId } = req.query;
+  if (!nationalId || !nationalId.trim()) {
+    return res.status(400).json({ error: 'nationalId query parameter is required' });
+  }
+
+  if (!checkRateLimit(req.user.id)) {
+    return res.status(429).json({
+      error: 'Too many lookups. Please wait before searching again.',
+    });
+  }
 
   try {
-    // 1. Query the separate Laboratory database (PostgreSQL) for screening findings
-    const labRecord = await labDb.labMedicalRecord.findUnique({
-      where: { faydaId: fayda_id },
+    const donor = await mainDb.donor.findUnique({
+      where: { fayda_id: nationalId.trim() },
     });
 
-    if (!labRecord) {
-      return res.status(404).json({
-        error:
-          "No medical history found in Laboratory database for this patient FAYDA ID.",
-      });
+    await logAction(
+      req.user.id,
+      'PATIENT_LOOKUP_FAYDA',
+      JSON.stringify({ searched_fayda: nationalId.trim(), found: !!donor }),
+      req.ip
+    );
+
+    if (!donor) {
+      return res.json({ found: false, message: 'No donor record found for this FAYDA ID.' });
     }
 
-    // 2. Fetch demographic information from the main PostgreSQL database if available
-    const donorProfile = await mainDb.donor.findUnique({
-      where: { fayda_id },
+    return res.json({ found: true, results: [{ fayda_id: donor.fayda_id, name: donor.name, dob: donor.dob, gender: donor.gender, blood_type: donor.blood_type }] });
+  } catch (err) {
+    console.error('[PATIENT_LOOKUP_FAYDA]', err);
+    res.status(500).json({ error: 'Lookup failed. Please try again.' });
+  }
+}
+
+// ─── ENDPOINT: Search by Full Name (partial, case-insensitive) ────────────────
+async function patientLookupByName(req, res) {
+  const { fullName } = req.query;
+  if (!fullName || !fullName.trim()) {
+    return res.status(400).json({ error: 'fullName query parameter is required' });
+  }
+
+  if (!checkRateLimit(req.user.id)) {
+    return res.status(429).json({
+      error: 'Too many lookups. Please wait before searching again.',
+    });
+  }
+
+  try {
+    const donors = await mainDb.donor.findMany({
+      where: {
+        name: { contains: fullName.trim(), mode: 'insensitive' },
+      },
+      select: {
+        fayda_id: true,
+        name: true,
+        dob: true,
+        gender: true,
+        blood_type: true,
+      },
+      take: 20,
     });
 
-    res.json({
-      faydaId: fayda_id,
-      name: labRecord.name,
-      phone: labRecord.phone,
-      bloodType: labRecord.bloodType,
-      medicalHistory: {
-        diseases: labRecord.diseases,
-        hemoglobin: labRecord.hemoglobin,
-        platelets: labRecord.platelets,
-        allergies: labRecord.allergies,
-        lastTested: labRecord.updatedAt,
-        notes: labRecord.otherNotes,
-      },
-      demographics: donorProfile
+    // Mask the fayda_id in the disambiguation list
+    const masked = donors.map((d) => ({
+      ...d,
+      fayda_id_masked: d.fayda_id.replace(/(\w{3})\w+(\w{3})/, '$1•••$2'),
+      fayda_id: d.fayda_id, // kept for selection — client must use this to fetch full record
+    }));
+
+    await logAction(
+      req.user.id,
+      'PATIENT_LOOKUP_NAME',
+      JSON.stringify({ searched_name: fullName.trim(), results_count: donors.length }),
+      req.ip
+    );
+
+    return res.json({ found: donors.length > 0, results: masked });
+  } catch (err) {
+    console.error('[PATIENT_LOOKUP_NAME]', err);
+    res.status(500).json({ error: 'Lookup failed. Please try again.' });
+  }
+}
+
+// ─── ENDPOINT: Full summary card for a confirmed FAYDA ID ─────────────────────
+async function getPatientRecord(req, res) {
+  const { faydaId } = req.params;
+
+  if (!checkRateLimit(req.user.id)) {
+    return res.status(429).json({
+      error: 'Too many lookups. Please wait before searching again.',
+    });
+  }
+
+  try {
+    const donor = await mainDb.donor.findUnique({ where: { fayda_id: faydaId } });
+    if (!donor) {
+      return res.status(404).json({ error: 'No donor record found.' });
+    }
+
+    const card = await buildSummaryCard(donor);
+
+    await logAction(
+      req.user.id,
+      'PATIENT_RECORD_VIEW',
+      JSON.stringify({ viewed_fayda: faydaId }),
+      req.ip
+    );
+
+    return res.json(card);
+  } catch (err) {
+    console.error('[PATIENT_RECORD_VIEW]', err);
+    res.status(500).json({ error: 'Failed to load patient record.' });
+  }
+}
+
+// ─── ENDPOINT: Reveal unmasked phone (audit logged separately) ────────────────
+async function revealPatientPhone(req, res) {
+  const { faydaId } = req.params;
+  try {
+    const donor = await mainDb.donor.findUnique({
+      where: { fayda_id: faydaId },
+      select: { phone: true, name: true },
+    });
+    if (!donor) return res.status(404).json({ error: 'Donor not found.' });
+
+    await logAction(
+      req.user.id,
+      'PATIENT_PHONE_REVEAL',
+      JSON.stringify({ revealed_fayda: faydaId, donor_name: donor.name }),
+      req.ip
+    );
+
+    return res.json({ phone: donor.phone });
+  } catch (err) {
+    console.error('[PATIENT_PHONE_REVEAL]', err);
+    res.status(500).json({ error: 'Failed to reveal phone.' });
+  }
+}
+
+// ─── ENDPOINT: Reveal full screening details (audit logged separately) ────────
+async function revealScreeningDetails(req, res) {
+  const { faydaId } = req.params;
+  try {
+    let labRecord = null;
+    try {
+      labRecord = await labDb.labMedicalRecord.findUnique({
+        where: { faydaId },
+      });
+    } catch (_) {}
+
+    const latestSample = await mainDb.bloodSample.findFirst({
+      where: { fayda_id: faydaId },
+      orderBy: { collected_at: 'desc' },
+      select: { health_notes: true, status: true, collected_at: true },
+    });
+
+    await logAction(
+      req.user.id,
+      'PATIENT_SCREENING_REVEAL',
+      JSON.stringify({ revealed_fayda: faydaId }),
+      req.ip
+    );
+
+    return res.json({
+      lab: labRecord
         ? {
-            gender: donorProfile.gender,
-            dob: donorProfile.dob,
-            address: donorProfile.address,
-            healthStatus: donorProfile.health_status,
+            diseases: labRecord.diseases,
+            hemoglobin: labRecord.hemoglobin,
+            platelets: labRecord.platelets,
+            allergies: labRecord.allergies,
+            notes: labRecord.otherNotes,
+            last_updated: labRecord.updatedAt,
           }
         : null,
+      sample_notes: latestSample?.health_notes || null,
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to query laboratory database" });
+    console.error('[PATIENT_SCREENING_REVEAL]', err);
+    res.status(500).json({ error: 'Failed to reveal screening details.' });
   }
+}
+
+// ─── Legacy alias (kept so existing route still resolves) ─────────────────────
+async function emergencyPatientLookup(req, res) {
+  req.query = { nationalId: req.params.fayda_id };
+  return patientLookupByFaydaId(req, res);
 }
 
 // List all active inter-hospital requests
@@ -400,6 +655,11 @@ module.exports = {
   submitRequisition,
   getRequisitions,
   emergencyPatientLookup,
+  patientLookupByFaydaId,
+  patientLookupByName,
+  getPatientRecord,
+  revealPatientPhone,
+  revealScreeningDetails,
   getInterHospitalRequests,
   createInterHospitalRequest,
   fulfillInterHospitalRequest,

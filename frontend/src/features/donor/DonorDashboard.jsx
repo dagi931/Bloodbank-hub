@@ -136,7 +136,7 @@ export default function DonorDashboard({ activeTab = 'dashboard', setActiveTab }
           
           {/* Header Greeting */}
           <div className="dashboard-header">
-            <h2>Welcome, {donor.name || 'Donor'}! <span role="img" aria-label="wave">&#x1F44B;</span></h2>
+            <h2>Welcome, {donor.name || 'Donor'}!</h2>
             <p>Thank you for being a life saver.</p>
           </div>
 
@@ -651,7 +651,7 @@ export default function DonorDashboard({ activeTab = 'dashboard', setActiveTab }
             </div>
             <div className="clean-list-item">
               <span style={{ color: 'var(--text-secondary)' }}>Blood Type:</span>
-              <strong style={{ color: '#ef233c' }}>{donor.blood_type}</strong>
+              <strong style={{ color: 'var(--color-danger)' }}>{donor.blood_type}</strong>
             </div>
             <div className="clean-list-item">
               <span style={{ color: 'var(--text-secondary)' }}>FAYDA National ID:</span>
@@ -659,7 +659,7 @@ export default function DonorDashboard({ activeTab = 'dashboard', setActiveTab }
             </div>
             <div className="clean-list-item">
               <span style={{ color: 'var(--text-secondary)' }}>Reward Points:</span>
-              <strong style={{ color: '#f59e0b' }}>{donor.points != null ? `${donor.points.toLocaleString()} pts` : '—'}</strong>
+              <strong style={{ color: 'var(--color-warning)' }}>{donor.points != null ? `${donor.points.toLocaleString()} pts` : '—'}</strong>
             </div>
           </div>
         </div>

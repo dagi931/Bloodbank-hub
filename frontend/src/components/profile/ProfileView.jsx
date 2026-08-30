@@ -209,14 +209,14 @@ export default function ProfileView({ user, setTab, onBack }) {
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginTop: '8px', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Mail size={14} color="var(--text-muted)" /> {profileData.email || user?.email}
+              <Mail size={14} color="currentColor" style={{ color: 'var(--text-secondary)' }} /> {profileData.email || user?.email}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Building size={14} color="var(--text-muted)" /> Status: <span style={{ color: '#06d6a0', fontWeight: 700 }}>Active & Verified</span>
+              <Building size={14} color="currentColor" style={{ color: 'var(--text-secondary)' }} /> Status: <span style={{ color: 'var(--color-success)', fontWeight: 700 }}>Active & Verified</span>
             </div>
             {profileData.created_at && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Calendar size={14} color="var(--text-muted)" /> Registered: {new Date(profileData.created_at).toLocaleDateString()}
+                <Calendar size={14} color="currentColor" style={{ color: 'var(--text-secondary)' }} /> Registered: {new Date(profileData.created_at).toLocaleDateString()}
               </div>
             )}
           </div>
@@ -235,28 +235,28 @@ export default function ProfileView({ user, setTab, onBack }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             
             <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', padding: '12px 14px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 500 }}>Entity / Workstation Name</span>
+              <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Entity / Workstation Name</span>
               <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem' }}>
                 {profileData.entity_name || donor.name || 'Official Workstation'}
               </span>
             </div>
 
             <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', padding: '12px 14px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 500 }}>System Role</span>
+              <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>System Role</span>
               <span style={{ fontWeight: 700, color: 'var(--primary)', fontSize: '0.88rem' }}>
                 {getRoleLabel(profileData.role || user?.role)}
               </span>
             </div>
 
             <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', padding: '12px 14px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 500 }}>Official Email</span>
+              <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Official Email</span>
               <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.85rem' }}>
                 {profileData.email || user?.email}
               </span>
             </div>
 
             <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', padding: '12px 14px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 500 }}>Account ID</span>
+              <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Account ID</span>
               <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
                 {profileData.id || user?.id || 'AUTH-SESSION-TOKEN'}
               </span>
@@ -266,28 +266,28 @@ export default function ProfileView({ user, setTab, onBack }) {
             {profileData.role === 'donor' && (
               <>
                 <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', padding: '12px 14px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 500 }}>FAYDA National ID</span>
-                  <span style={{ fontWeight: 800, color: '#3a86ff', fontSize: '0.9rem' }}>
+                  <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>FAYDA National ID</span>
+                  <span style={{ fontWeight: 800, color: 'var(--color-info)', fontSize: '0.9rem' }}>
                     {donor.fayda_id || 'ET-FAY-VERIFIED'}
                   </span>
                 </div>
 
                 <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', padding: '12px 14px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 500 }}>Blood Group</span>
-                  <span style={{ fontWeight: 800, color: '#ef233c', fontSize: '1rem', background: 'rgba(239,35,60,0.1)', padding: '2px 10px', borderRadius: '4px' }}>
+                  <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Blood Group</span>
+                  <span style={{ fontWeight: 800, color: 'var(--color-danger)', fontSize: '0.95rem', background: 'rgba(239,35,60,0.12)', border: '1px solid rgba(239,35,60,0.25)', padding: '2px 10px', borderRadius: '4px' }}>
                     {donor.blood_type || 'O+'}
                   </span>
                 </div>
 
                 <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', padding: '12px 14px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 500 }}>Total Points</span>
-                  <span style={{ fontWeight: 800, color: '#f59e0b', fontSize: '0.95rem' }}>
+                  <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Total Points</span>
+                  <span style={{ fontWeight: 800, color: 'var(--color-warning)', fontSize: '0.95rem' }}>
                     &#x1F3C6; {donor.points || 0} pts
                   </span>
                 </div>
 
                 <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-color)', padding: '12px 14px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', fontWeight: 500 }}>Phone Number</span>
+                  <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Phone Number</span>
                   <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.85rem' }}>
                     {donor.phone || '+251 911 000 000'}
                   </span>
@@ -317,7 +317,7 @@ export default function ProfileView({ user, setTab, onBack }) {
                   required 
                   style={{ width: '100%', paddingRight: '42px', background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }}
                 />
-                <button type="button" onClick={() => setShowCurrentPassword((value) => !value)} title={showCurrentPassword ? 'Hide password' : 'Show password'} aria-label={showCurrentPassword ? 'Hide password' : 'Show password'} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0, display: 'flex' }}>{showCurrentPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+                <button type="button" onClick={() => setShowCurrentPassword((value) => !value)} title={showCurrentPassword ? 'Hide password' : 'Show password'} aria-label={showCurrentPassword ? 'Hide password' : 'Show password'} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: 0, display: 'flex' }}>{showCurrentPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
               </div>
             </div>
 
@@ -332,7 +332,7 @@ export default function ProfileView({ user, setTab, onBack }) {
                   required 
                   style={{ width: '100%', paddingRight: '42px', background: 'var(--input-bg)', color: 'var(--text-primary)', border: '1px solid var(--input-border)' }}
                 />
-                <button type="button" onClick={() => setShowNewPassword((value) => !value)} title={showNewPassword ? 'Hide password' : 'Show password'} aria-label={showNewPassword ? 'Hide password' : 'Show password'} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0, display: 'flex' }}>{showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+                <button type="button" onClick={() => setShowNewPassword((value) => !value)} title={showNewPassword ? 'Hide password' : 'Show password'} aria-label={showNewPassword ? 'Hide password' : 'Show password'} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: 0, display: 'flex' }}>{showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
               </div>
             </div>
 
@@ -351,17 +351,17 @@ export default function ProfileView({ user, setTab, onBack }) {
                     background: 'var(--input-bg)', 
                     color: 'var(--text-primary)', 
                     border: newPassword && confirmPassword && newPassword !== confirmPassword 
-                      ? '1px solid #ef233c'
+                      ? '1px solid var(--color-danger)' 
                       : '1px solid var(--input-border)'
                   }}
                 />
-                <button type="button" onClick={() => setShowConfirmPassword((value) => !value)} title={showConfirmPassword ? 'Hide password' : 'Show password'} aria-label={showConfirmPassword ? 'Hide password' : 'Show password'} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0, display: 'flex' }}>{showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+                <button type="button" onClick={() => setShowConfirmPassword((value) => !value)} title={showConfirmPassword ? 'Hide password' : 'Show password'} aria-label={showConfirmPassword ? 'Hide password' : 'Show password'} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: 0, display: 'flex' }}>{showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
               </div>
               {newPassword && confirmPassword && newPassword !== confirmPassword && (
-                <span style={{ color: '#ef233c', fontSize: '0.72rem', marginTop: '4px', display: 'block' }}>&#x2717; Passwords do not match</span>
+                <span style={{ color: 'var(--color-danger)', fontSize: '0.72rem', marginTop: '4px', display: 'block' }}>&#x2717; Passwords do not match</span>
               )}
               {newPassword && confirmPassword && newPassword === confirmPassword && (
-                <span style={{ color: '#06d6a0', fontSize: '0.72rem', marginTop: '4px', display: 'block' }}>&#x2713; Passwords match</span>
+                <span style={{ color: 'var(--color-success)', fontSize: '0.72rem', marginTop: '4px', display: 'block' }}>&#x2713; Passwords match</span>
               )}
             </div>
 
@@ -382,10 +382,10 @@ export default function ProfileView({ user, setTab, onBack }) {
       {activeRole !== 'admin' && (
         <div
           className="dashboard-card"
-          style={{ borderColor: 'rgba(239,35,60,0.4)', borderWidth: '1px', borderStyle: 'solid' }}
+          style={{ borderColor: 'rgba(239,35,60,0.3)', borderWidth: '1px', borderStyle: 'solid' }}
         >
           <div className="dashboard-header" style={{ marginBottom: '12px' }}>
-            <h2 style={{ color: '#ef233c', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h2 style={{ color: 'var(--color-danger)', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Trash2 size={18} /> Danger Zone
             </h2>
             <p>Permanently remove your account from the Blood Bank Hub system.</p>
@@ -393,10 +393,10 @@ export default function ProfileView({ user, setTab, onBack }) {
 
           {deletionPending ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', padding: '14px 16px', borderRadius: '8px' }}>
-              <ShieldCheck size={18} color="#f59e0b" />
+              <ShieldCheck size={18} color="var(--color-warning)" />
               <div>
-                <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#f59e0b' }}>Deletion request pending admin approval</div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--color-warning)' }}>Deletion request pending admin approval</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
                   Your account will be permanently removed once an administrator approves this request.
                 </div>
               </div>
@@ -407,12 +407,12 @@ export default function ProfileView({ user, setTab, onBack }) {
                 Donor accounts are deleted immediately without administrator approval. This action cannot be undone and you will lose access to your donation history and points.
               </p>
               {!confirmingDelete ? (
-                <button onClick={() => setConfirmingDelete(true)} className="btn btn-outline" disabled={deleting} style={{ color: '#ef233c', borderColor: '#ef233c', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <button onClick={() => setConfirmingDelete(true)} className="btn btn-outline" disabled={deleting} style={{ color: 'var(--color-danger)', borderColor: 'rgba(239,35,60,0.4)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Trash2 size={15} /> Delete My Account
                 </button>
               ) : (
                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                  <button onClick={handleDeleteAccount} className="btn btn-primary" disabled={deleting} style={{ background: '#ef233c', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <button onClick={handleDeleteAccount} className="btn btn-primary" disabled={deleting} style={{ background: 'var(--color-danger)', borderColor: 'var(--color-danger)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <Trash2 size={15} /> {deleting ? 'Deleting...' : 'Yes, Permanently Delete'}
                   </button>
                   <button onClick={() => setConfirmingDelete(false)} className="btn btn-outline" disabled={deleting}>
@@ -426,7 +426,7 @@ export default function ProfileView({ user, setTab, onBack }) {
               <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: '0 0 12px 0' }}>
                 Workstation accounts ({getRoleLabel(activeRole)}) require administrator approval before deletion. Submitting a request will notify the system administrator, who will review and finalize the deletion.
               </p>
-              <button onClick={handleRequestDeletion} className="btn btn-outline" disabled={deleting} style={{ color: '#ef233c', borderColor: '#ef233c', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <button onClick={handleRequestDeletion} className="btn btn-outline" disabled={deleting} style={{ color: 'var(--color-danger)', borderColor: 'rgba(239,35,60,0.4)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Trash2 size={15} /> {deleting ? 'Submitting...' : 'Request Account Deletion'}
               </button>
             </>
